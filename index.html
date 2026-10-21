@@ -151,6 +151,25 @@ h1.brand .tag { font-size: 14px; font-weight: 600; color: var(--muted); letter-s
 @media (max-width: 520px) { .h2h-num { font-size: 36px; } }
 h1.brand .tag { font-size: 15px; line-height: 1.2; }
 
+/* handbook */
+.hb-intro h2 { margin-bottom: 6px; }
+.hb-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.chip { font: inherit; font-size: 13px; padding: 5px 12px; border-radius: 99px; border: 1px solid var(--line); background: var(--card); color: var(--text); cursor: pointer; }
+.chip:hover { background: var(--accent-soft); border-color: var(--accent); }
+.hb { scroll-margin-top: 120px; }
+.hb-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+.hb-head h2 { margin: 0; }
+.hb-top { font-size: 12px; font-weight: 400; color: var(--muted); white-space: nowrap; }
+.hb h3 { margin: 16px 0 6px; font-size: 14px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.hb-list, .hb-owners { margin: 4px 0; padding-left: 20px; }
+.hb-list li, .hb-owners li { margin-bottom: 5px; }
+.hb-list ul { margin: 4px 0 6px; padding-left: 20px; list-style: circle; }
+.hb td, .hb th { white-space: normal; }
+.new { display: inline-block; background: var(--accent); color: #fff; font-size: 10px; font-weight: 700; letter-spacing: .05em; padding: 1px 6px; border-radius: 4px; vertical-align: middle; }
+.hb-cal tr.past td { color: var(--muted); }
+.done { font-size: 11px; border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; margin-left: 4px; }
+.hb-order td:first-child { text-align: center; width: 54px; }
+
 :root { box-sizing: border-box; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
 html { scroll-padding-top: env(safe-area-inset-top, 0px); }
 
@@ -706,6 +725,153 @@ function tradesBody(ctx, p) {
   return `<p class="note">${shown.length} trade${shown.length === 1 ? "" : "s"}. A traded pick shows the player it became in parentheses once that draft has happened.</p><div class="trades">${cards}</div>`;
 }
 
+// League handbook content. Edit the text in here when the rules change.
+const NEW = `<span class="new">NEW</span>`;
+const hbSection = (id, title, body) => `<section class="card hb" id="hb-${id}"><div class="hb-head"><h2>${title}</h2><button class="linkbtn hb-top" data-act="hb-top">Back to top</button></div>${body}</section>`;
+const hbList = (items) => `<ul class="hb-list">${items.map((i) => (Array.isArray(i) ? `<li>${i[0]}<ul>${i[1].map((c) => `<li>${c}</li>`).join("")}</ul></li>` : `<li>${i}</li>`)).join("")}</ul>`;
+const hbTable = (heads, rows, cls = "") => `<div class="table-wrap"><table class="${cls}"><thead><tr>${heads.map((h) => `<th>${h}</th>`).join("")}</tr></thead><tbody>${rows.map((r) => `<tr${r.cls ? ` class="${r.cls}"` : ""}>${r.cells.map((c) => `<td>${c}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+const via = (s) => s.replace(/\s*\((via [^)]*)\)/i, ` <span class="muted">($1)</span>`);
+
+function handbookView() {
+  const today = new Date();
+  // [what, when, last day it applies (for greying out finished items), new-flag on the label, new-flag on the date]
+  const cal = [
+    ["Proposed rule changes for the 2026 season", "June 1 – July 1, 2026", "2026-07-01", false, false],
+    ["League rule change voting", "July 2 – July 8", "2026-07-08", false, false],
+    ["Roster cut down, pre-draft", "August 1, 2pm (22 players)", "2026-08-01", true, true],
+    ["Money due to Guad (@scott-guad): $150", "September 1, 2026", "2026-09-01", false, true],
+    ["Draft date", "Tuesday, September 8, 2026 @ 8PM", "2026-09-08", false, true],
+    ["Roster cut down, post-draft/Week 1", "Wednesday, Sept. 9, 2026 (rookies to taxi squad), 3pm", "2026-09-09", true, true],
+    ["NFL season starts", "Thursday, Sept. 9th, 2026", "2026-09-09", false, false],
+    ["Payout", "Sunday, Jan. 17, 2027", "2027-01-17", false, false],
+  ].map(([what, when, end, nl, nd]) => {
+    const done = new Date(end + "T23:59:59") < today;
+    return { cls: done ? "past" : "", cells: [`${what}${nl ? ` ${NEW}` : ""}`, `${when}${nd ? ` ${NEW}` : ""}${done ? ` <span class="done">done</span>` : ""}`] };
+  });
+
+  const owners = ["Andrew Lutz", "Scott Guadagnino", "Brett Etter", "Nils Larson", "Josh Blake", "Bryce Etter", "Ryan Schuberth",
+    "William Gallagher", "Evan Weidaw", "Chris “Bandman” Baskwell", "Bill Schenk", "Justin Valenti"];
+
+  const order = [
+    ["Guad", "Brett (via Guad)", "Guad"],
+    ["Bill S.", "Bill S.", "Bill S."],
+    ["Schub (via Lutz)", "Schub (via Lutz)", "Justin (via Lutz)"],
+    ["Schub", "Schub", "Schub"],
+    ["Bill G.", "Baskwell (via Bill G.)", "Bill G."],
+    ["Weidaw", "Bill S. (via Weidaw)", "Weidaw"],
+    ["Bill S. (via Justin)", "Lutz (via Justin)", "Justin"],
+    ["Bill G. (via Blake)", "Bill S. (via Blake)", "Bill S. (via Blake)"],
+    ["Baskwell", "Baskwell", "Baskwell"],
+    ["Nils", "Nils", "Nils"],
+    ["Bryce", "Bill S. (via Bryce)", "Bryce"],
+    ["Justin (via Brett)", "Brett", "Brett"],
+  ];
+
+  const chips = [["calendar", "Calendar"], ["owners", "Owners"], ["draft", "2026 draft"], ["cuts", "Roster cuts"], ["rules", "Rules"], ["waivers", "Waivers"],
+    ["taxi", "Taxi squad"], ["active", "Stay active"], ["roster", "Roster"], ["order2027", "2027 draft order"], ["punishment", "Last place"], ["payouts", "Payouts"]];
+
+  return `
+  <section class="card hb-intro">
+    <h2>2026 Preseason Ronnie Bass Dynasty League Handbook</h2>
+    <p class="note" style="margin:0">Last updated July 23, 2026. ${NEW} marks content that is new or changed from last year. Dates are subject to change.</p>
+    <div class="hb-chips">${chips.map(([id, label]) => `<button class="chip" data-act="hb-jump" data-target="hb-${id}">${label}</button>`).join("")}</div>
+  </section>
+
+  ${hbSection("calendar", "Calendar to remember", hbTable(["Dynasty calendar", "Date"], cal, "hb-cal"))}
+
+  ${hbSection("owners", "League owners", `<ol class="hb-owners">${owners.map((o) => `<li>${o}</li>`).join("")}</ol>`)}
+
+  ${hbSection("draft", "2026 draft", hbList([
+    "You have 1 minute to make your selection.",
+    "<strong>DO NOT USE ALL OF THE MINUTE IF YOU DON’T NEED IT!</strong>",
+    "While you have 1 minute, be aware when you are up and prepared.",
+    "You are welcome to draft rookies and free agents during the draft.",
+    "The draft is 3 rounds.",
+    ["Any rookie drafted is eligible for the taxi squad.", ["Current NFL players are NOT taxi squad eligible."]],
+    "You MAY trade draft picks.",
+  ]) + `<h3>Draft order</h3>` + hbTable(["Pick", "Round 1", "Round 2", "Round 3"], order.map((r, i) => ({ cells: [`<strong>${i + 1}</strong>`, ...r.map(via)] })), "hb-order"))}
+
+  ${hbSection("cuts", "Roster cut down", hbList([
+    [`<strong>Off-season cutdown: August 1st, 2pm</strong> ${NEW}`, ["Rosters go from 27 to 22 players."]],
+    ["<strong>Roster cutdown day is Wednesday, September 9th, 3pm</strong>", [
+      "Active roster goes from 22 to 21 players.",
+      "Any player not going to IR or taxi squad moves to waivers/free agent.",
+      "The first game is Wednesday, NOT Thursday, this season.",
+    ]],
+  ]))}
+
+  ${hbSection("rules", "Rules for 2026", hbList([
+    "League buy-in $150.",
+    ["Decimal scoring", ["0.1 per 10 yards rushing/receiving (1 point per 100 yards)", "0.01 per yard passing (1 per 100 yards)"]],
+    ["Each off-season you are welcome to submit any changes to the roster, settings, or format.", [
+      "All proposed changes must be submitted in the group chat by July 1st before the new season.",
+      "Voting will be one weeklong, or whenever everyone completes the survey or not.",
+      "To make a change, 8 of 12 owners must agree to it.",
+    ]],
+    "3 IR spots",
+    ["2 system scoring. You have 2 games each week:", [
+      "1 vs an opponent",
+      "1 vs the league. Top 50% get a win, bottom 50% get a loss using total points. This rewards teams for scoring points but losing.",
+      `Bonus points will be awarded for 100–199 and 200-plus (1 and 2 pts respectively). ${NEW}`,
+    ]],
+  ]))}
+
+  ${hbSection("waivers", `Free agents / waivers ${NEW}`, hbList([
+    "We will now bid for players.",
+    "Each team has a 100 point bid allowance.",
+    "Bids are made blindly.",
+    "Min bid is 1.",
+  ]))}
+
+  ${hbSection("taxi", "Taxi squad", hbList([
+    ["Your taxi squad is for rookies only. They can remain on the taxi squad for their rookie year only.", [
+      "Once a player is moved from the taxi squad to the active roster, they cannot be moved back to the taxi squad. Even if you move them to your bench and do not play them. There is nothing the commissioner can do if you make a mistake, the system is set to lock at the start of the season.",
+      "Think of it like a practice squad.",
+    ]],
+    ["This is only for your drafted rookies.", [
+      "If you trade for a rookie, they cannot be put on your taxi squad.",
+      "If you trade for a rookie pick and you make the pick, then they can be.",
+      "If you trade for a player on someone else’s taxi squad, they move to your active roster automatically.",
+    ]],
+    ["If they are not designated by the NFL as a rookie, they cannot be put on a taxi squad. Vets that are drafted during the rookie draft are not rookies.", [
+      "A vet would require a player to be dropped from your active roster.",
+    ]],
+  ]))}
+
+  ${hbSection("active", "Stay active", `<p>During the fantasy season be active within the league. Being active means you:</p>` + hbList([
+    "Respond to trade offers via the app or text message within the week. This could be something such as acknowledge you’ve seen the trade, counter, accept, or decline.",
+    "Lineups should be set weekly.",
+    "Yearly money should be paid prior to the start of the season.",
+    "All teams should have equal opportunity to trade with you.",
+    "Acknowledge texts and DMs during the draft.",
+    "Keep pace with the calendar for cuts and lineup expectations.",
+  ]) + `<h3>Consequences</h3><ol class="hb-owners">
+    <li>Warning</li>
+    <li>Loss of second round pick (the pick is locked and cannot be traded, if no pick exists during the following year draft it moves to a first-round pick, if both picks are gone the commissioner will decide an equivalent punishment)</li>
+    <li>You’ll be asked to take on a co-manager</li>
+    <li>Vote for replacement</li></ol>`)}
+
+  ${hbSection("roster", "Roster construction", `<p><strong>21 roster spots</strong></p>` + hbTable(["Position", "Starters", "Roster limit"], [
+    { cells: ["Quarterback", "1", "6"] }, { cells: ["Running back", "2", "8"] }, { cells: ["Wide receivers", "2", "8"] }, { cells: ["Tight end", "1", "8"] },
+    { cells: ["Flex (WR/RB/TE)", "2", "-"] }, { cells: ["Defense", "1", "4"] }, { cells: ["Bench players", "12", "-"] },
+  ]))}
+
+  ${hbSection("order2027", "2027 draft order", hbTable(["Picks", "Who gets them"], [
+    { cells: [`1–6 ${NEW}`, `<strong>Non-playoff teams</strong>, by total team points. Least points = pick 1.`] },
+    { cells: ["7–8", `<strong>Playoff teams eliminated in round 1.</strong><br>Pick 7: lowest seeded team to lose round 1<br>Pick 8: second lowest seeded team to lose round 1`] },
+    { cells: ["9–10", `Pick 9: loser of the 3rd place game<br>Pick 10: winner of the 3rd place game`] },
+    { cells: ["11–12", `Pick 11: championship game loser<br>Pick 12: league champ`] },
+  ]))}
+
+  ${hbSection("punishment", `Last place punishment ${NEW}`, `<p>The person who earns pick 1.1 in the 2027 draft must walk and caddie for the league winner for 1–18 holes of golf.</p>`)}
+
+  ${hbSection("payouts", "Payouts", hbTable(["Prize", "Payout"], [
+    { cells: ["Weekly high score", "$32.14"] }, { cells: ["Regular season winner", "$350"] }, { cells: ["Playoff champion", "$500"] },
+    { cells: ["Playoff runner-up", "$325"] }, { cells: ["Playoff 3rd place", "$175"] },
+  ]) + `<p class="note">Payout day: Sunday, Jan. 17, 2027.</p>`)}
+  `;
+}
+
 // Hosted version: the league data lives in the page's shared database and is entered inside the app.
 const SAMPLE = DATA; // embedded sample league, shown until the first real season is saved
 
@@ -1035,6 +1201,7 @@ const pages = {
   h2h: ["Head-to-head", (c, p) => h2hView(c, p)],
   records: ["Records", (c) => recordsView(c)],
   managers: ["Managers", (c) => managersView(c)],
+  handbook: ["Handbook", () => handbookView()],
   data: ["Add data", () => dataView()],
   scores: ["Add scores", () => scoresView()],
 };
@@ -1256,6 +1423,8 @@ document.addEventListener("click", (e) => {
     render();
   }
   else if (act === "clear") { draft = newDraft(); pendingFiles = []; status = ""; render(); }
+  else if (act === "hb-jump") { const el = document.getElementById(b.dataset.target); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); }
+  else if (act === "hb-top") window.scrollTo({ top: 0, behavior: "smooth" });
   else if (act === "h2h-open") { params.b = b.dataset.opp; render(); window.scrollTo({ top: 0 }); }
   else if (act === "gaddrow") {
     const last = gdraft.games[gdraft.games.length - 1];
