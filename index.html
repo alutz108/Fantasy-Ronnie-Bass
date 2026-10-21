@@ -132,6 +132,24 @@ h1.brand { display: flex; align-items: center; gap: 12px; margin: 0 0 6px; }
 h1.brand .logo { height: 56px; width: auto; display: block; }
 h1.brand .tag { font-size: 14px; font-weight: 600; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
 
+/* head-to-head */
+.linkbtn { font: inherit; background: none; border: 0; padding: 0; color: var(--accent); font-weight: 600; cursor: pointer; text-align: left; }
+.linkbtn:hover { text-decoration: underline; }
+.h2h-board { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px; margin: 10px 0 4px; text-align: center; }
+.h2h-side { border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 8px; background: var(--card); }
+.h2h-side.lead { border-color: var(--accent); background: var(--accent-soft); }
+.h2h-name { font-weight: 700; font-size: 16px; }
+.h2h-num { font-size: 44px; font-weight: 800; line-height: 1.1; }
+.h2h-sub { font-size: 12px; color: var(--muted); }
+.h2h-mid { color: var(--muted); font-weight: 600; }
+.h2h-mid span { display: block; font-size: 11px; font-weight: 400; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; margin: 8px 0 16px; }
+.tile { border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; background: var(--card); }
+.tile .k { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.tile .v { font-size: 17px; font-weight: 700; margin-top: 2px; }
+.tile .s { font-size: 12px; color: var(--muted); margin-top: 2px; }
+@media (max-width: 520px) { .h2h-num { font-size: 36px; } }
+
 :root { box-sizing: border-box; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
 html { scroll-padding-top: env(safe-area-inset-top, 0px); }
 
@@ -355,6 +373,61 @@ function tradeList(ctx) {
   }));
 }
 
+// ---- head-to-head: pick a manager and see every opponent, or open one matchup ----
+const typeOk = (g, f) => f === "all" || (f === "playoff" ? g.type === "playoff" : g.type === "regular");
+
+function h2hManagers(ctx) {
+  const ids = new Set();
+  for (const g of games(ctx)) if (g.a.m && g.b.m && g.a.m !== g.b.m) { ids.add(g.a.m); ids.add(g.b.m); }
+  return [...ids].sort((x, y) => ctx.name(x).localeCompare(ctx.name(y)));
+}
+
+// one manager's record against each opponent
+function h2hAgainstAll(ctx, me, filter = "all") {
+  const rows = new Map();
+  for (const g of games(ctx)) {
+    if (!typeOk(g, filter)) continue;
+    let mine, theirs;
+    if (g.a.m === me) { mine = g.a; theirs = g.b; } else if (g.b.m === me) { mine = g.b; theirs = g.a; } else continue;
+    if (!theirs.m || theirs.m === me) continue;
+    const r = rows.get(theirs.m) || { opp: theirs.m, w: 0, l: 0, t: 0, pf: 0, pa: 0, last: null };
+    if (mine.score > theirs.score) r.w++; else if (mine.score < theirs.score) r.l++; else r.t++;
+    r.pf += mine.score; r.pa += theirs.score; r.last = { year: g.year, week: g.week };
+    rows.set(theirs.m, r);
+  }
+  return [...rows.values()].map((r) => ({ ...r, games: r.w + r.l + r.t, pct: pct(r.w, r.l, r.t) }))
+    .sort((a, b) => b.games - a.games || b.pct - a.pct);
+}
+
+// every game between two managers, plus the numbers worth showing
+function h2hPair(ctx, me, opp, filter = "all") {
+  const chrono = [];
+  for (const g of games(ctx)) {
+    if (!typeOk(g, filter)) continue;
+    let mine, theirs;
+    if (g.a.m === me && g.b.m === opp) { mine = g.a; theirs = g.b; } else if (g.b.m === me && g.a.m === opp) { mine = g.b; theirs = g.a; } else continue;
+    const margin = mine.score - theirs.score;
+    chrono.push({ year: g.year, week: g.week, type: g.type, mine, theirs, margin, result: margin > 0 ? "W" : margin < 0 ? "L" : "T" });
+  }
+  const out = { n: chrono.length, w: 0, l: 0, t: 0, pf: 0, pa: 0, reg: { w: 0, l: 0, t: 0 }, po: { w: 0, l: 0, t: 0 },
+    biggestWin: null, biggestLoss: null, longestWin: 0, longestLoss: 0, current: null, last: chrono.at(-1) || null, list: [...chrono].reverse() };
+  let run = 0, runKind = null;
+  for (const g of chrono) {
+    const k = g.result.toLowerCase();
+    out[k]++; (g.type === "playoff" ? out.po : out.reg)[k]++;
+    out.pf += g.mine.score; out.pa += g.theirs.score;
+    if (g.margin > 0 && (!out.biggestWin || g.margin > out.biggestWin.margin)) out.biggestWin = g;
+    if (g.margin < 0 && (!out.biggestLoss || g.margin < out.biggestLoss.margin)) out.biggestLoss = g;
+    if (g.result === runKind) run++; else { runKind = g.result; run = 1; }
+    if (g.result === "W") out.longestWin = Math.max(out.longestWin, run);
+    if (g.result === "L") out.longestLoss = Math.max(out.longestLoss, run);
+  }
+  if (runKind === "W" || runKind === "L") out.current = { holder: runKind === "W" ? "me" : "opp", length: run };
+  out.avgMine = out.n ? out.pf / out.n : 0;
+  out.avgTheirs = out.n ? out.pa / out.n : 0;
+  return out;
+}
+
 // Turns stats into HTML. This is the file to edit when you want to change how a page is laid out.
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -416,48 +489,61 @@ function allTimeView(ctx) {
   return section("All-time leaderboard", table(heads, rows), "Regular-season records only. Sorted by titles, then win %.");
 }
 
-function h2hView(ctx, a, b) {
-  const h = headToHead(ctx);
-  if (!h.ids.length) return section("Head-to-head", `<p class="muted">Head-to-head needs weekly scores, which haven’t been added yet.</p>`);
-  const short = (id) => esc(ctx.name(id));
-  const matrix = table(
-    ["", ...h.ids.map(short)],
-    h.ids.map((row) => [
-      `<strong>${short(row)}</strong>`,
-      ...h.ids.map((col) => {
-        if (row === col) return `<span class="muted">-</span>`;
-        const r = h.get(row, col);
-        if (!r) return `<span class="muted">-</span>`;
-        const cls = r.w > r.l ? "win" : r.w < r.l ? "loss" : "even";
-        return `<span class="pill ${cls}">${rec(r.w, r.l, r.t)}</span>`;
-      }),
-    ]),
-    "matrix"
-  );
+function h2hView(ctx, p) {
+  const ids = h2hManagers(ctx);
+  if (!ids.length) return section("Head-to-head", `<p class="muted">Head-to-head needs weekly scores, which haven’t been added yet.</p>`);
+  const first = allTime(ctx).find((r) => ids.includes(r.managerId));
+  const A = ids.includes(p.a) ? p.a : (first ? first.managerId : ids[0]);
+  const B = p.b && p.b !== "all" && p.b !== A && ids.includes(p.b) ? p.b : "all";
+  const filter = p.ht === "regular" || p.ht === "playoff" ? p.ht : "all";
+  const opt = (value, label, sel) => `<option value="${esc(value)}"${sel ? " selected" : ""}>${esc(label)}</option>`;
+  const nm = (id) => ctx.name(id);
+  const controls = `<div class="filters">
+    <label class="inline">Manager <select id="h2h-a">${ids.map((id) => opt(id, nm(id), id === A)).join("")}</select></label>
+    <label class="inline">vs <select id="h2h-b">${opt("all", "Everyone", B === "all")}${ids.filter((id) => id !== A).map((id) => opt(id, nm(id), id === B)).join("")}</select></label>
+    <label class="inline">Games <select id="h2h-type">${opt("all", "Regular season and playoffs", filter === "all")}${opt("regular", "Regular season only", filter === "regular")}${opt("playoff", "Playoffs only", filter === "playoff")}</select></label>
+  </div>`;
 
-  const A = h.ids.includes(a) ? a : h.ids[0];
-  const B = h.ids.includes(b) && b !== A ? b : h.ids.find((x) => x !== A);
-  const opt = (sel) => h.ids.map((id) => `<option value="${esc(id)}"${id === sel ? " selected" : ""}>${short(id)}</option>`).join("");
-  let detail = "";
-  if (A && B) {
-    const r = h.get(A, B);
-    const list = pairGames(ctx, A, B).slice(0, 15).map((g) => {
-      const mine = g.a.m === A ? g.a : g.b;
-      const theirs = g.a.m === A ? g.b : g.a;
-      return [when(g.year, g.week) + (g.type === "playoff" ? " (playoffs)" : ""), `${f1(mine.score)} - ${f1(theirs.score)}`,
-        mine.score > theirs.score ? short(A) : mine.score < theirs.score ? short(B) : "Tie"];
+  if (B === "all") {
+    const rows = h2hAgainstAll(ctx, A, filter).map((r) => {
+      const cls = r.w > r.l ? "win" : r.w < r.l ? "loss" : "even";
+      return [`<button class="linkbtn" data-act="h2h-open" data-opp="${esc(r.opp)}">${esc(nm(r.opp))}</button>`, esc(r.games),
+        `<span class="pill ${cls}">${rec(r.w, r.l, r.t)}</span>`, pct3(r.pct), f1(r.pf), f1(r.pa), r.last ? when(r.last.year, r.last.week) : ""];
     });
-    detail = `
-      <div class="pickers">
-        <label class="inline"><select id="h2h-a">${opt(A)}</select></label>
-        <span>vs</span>
-        <label class="inline"><select id="h2h-b">${opt(B)}</select></label>
-      </div>
-      ${r ? `<p class="big">${short(A)} leads ${rec(r.w, r.l, r.t)} <span class="muted">(${f1(r.pf)} - ${f1(r.pa)} total points)</span></p>
-             ${table(["When", "Score", "Winner"], list)}` : `<p class="muted">These two have never played each other.</p>`}`;
+    const body = rows.length ? table(["Opponent", "Games", "Record", "Win %", "Points for", "Points against", "Last played"], rows)
+      : `<p class="muted">${esc(nm(A))} has no games in that selection.</p>`;
+    return section(`${nm(A)} against everyone`, `${controls}<p class="note">Tap an opponent to see every game between you two.</p>${body}`);
   }
-  return section("Head-to-head", matrix, "Read across: the row manager’s record against the column manager. Regular season and playoffs.") +
-    section("Matchup detail", detail);
+
+  const x = h2hPair(ctx, A, B, filter);
+  if (!x.n) return section(`${nm(A)} vs ${nm(B)}`, `${controls}<p class="muted">These two haven’t played each other${filter === "all" ? "" : " in that selection"}.</p>`);
+  const lead = x.w > x.l ? "me" : x.w < x.l ? "opp" : null;
+  const headline = lead
+    ? `${esc(nm(lead === "me" ? A : B))} leads the series ${rec(Math.max(x.w, x.l), Math.min(x.w, x.l), x.t)}`
+    : `Series tied ${rec(x.w, x.l, x.t)}`;
+  const side = (id, wins, avg, isLead) => `<div class="h2h-side${isLead ? " lead" : ""}"><div class="h2h-name">${esc(nm(id))}</div><div class="h2h-num">${esc(wins)}</div><div class="h2h-sub">wins, avg ${f1(avg)}</div></div>`;
+  const tile = (k, v, sub = "") => `<div class="tile"><div class="k">${esc(k)}</div><div class="v">${v}</div>${sub ? `<div class="s">${sub}</div>` : ""}</div>`;
+  const big = (g) => g ? `${f1(Math.abs(g.margin))} pts <span class="muted">${when(g.year, g.week)}</span>` : `<span class="muted">none</span>`;
+  const cur = x.current ? `${esc(nm(x.current.holder === "me" ? A : B))} won ${esc(x.current.length)} straight` : `<span class="muted">-</span>`;
+  const l = x.last;
+  const lastTxt = l ? `${when(l.year, l.week)}${l.type === "playoff" ? " (playoffs)" : ""}<br><span class="muted">${esc(nm(l.result === "W" ? A : l.result === "L" ? B : A))}${l.result === "T" ? " tied" : " won"} ${f1(Math.max(l.mine.score, l.theirs.score))} to ${f1(Math.min(l.mine.score, l.theirs.score))}</span>` : "";
+  const tiles = [
+    tile("Games", esc(x.n), filter === "all" ? `${rec(x.reg.w, x.reg.l, x.reg.t)} regular season${x.po.w + x.po.l + x.po.t ? `<br>${rec(x.po.w, x.po.l, x.po.t)} playoffs` : ""}` : ""),
+    tile("Total points", `${f1(x.pf)} - ${f1(x.pa)}`, `${esc(nm(A))} - ${esc(nm(B))}`),
+    tile(`${nm(A)}’s biggest win`, big(x.biggestWin)),
+    tile(`${nm(B)}’s biggest win`, big(x.biggestLoss)),
+    tile("Longest win streak", `${esc(nm(A))} ${esc(x.longestWin)}<br>${esc(nm(B))} ${esc(x.longestLoss)}`),
+    tile("Current streak", cur),
+    tile("Last meeting", lastTxt),
+  ].join("");
+  const list = x.list.map((g) => [when(g.year, g.week) + (g.type === "playoff" ? ` <span class="kp">P</span>` : ""),
+    `${f1(g.mine.score)} - ${f1(g.theirs.score)}`,
+    g.result === "W" ? esc(nm(A)) : g.result === "L" ? esc(nm(B)) : "Tie", f1(Math.abs(g.margin))]);
+  return section(`${nm(A)} vs ${nm(B)}`, `${controls}
+    <div class="h2h-board">${side(A, x.w, x.avgMine, lead === "me")}<div class="h2h-mid">vs${x.t ? `<span>${esc(x.t)} tie${x.t > 1 ? "s" : ""}</span>` : ""}</div>${side(B, x.l, x.avgTheirs, lead === "opp")}</div>
+    <p class="big">${headline}</p>
+    <div class="tiles">${tiles}</div>
+    <h3>All games</h3>${table(["When", `Score (${nm(A)} first)`, "Winner", "Margin"], list)}`);
 }
 
 function recordsView(ctx) {
@@ -678,7 +764,7 @@ function setLive(seasons, gdocs, drafts, trades) {
 const EDIT_PIN = String((typeof CONFIG !== "undefined" && CONFIG && CONFIG.editPin) || "");
 let unlocked = !EDIT_PIN;
 try { if (EDIT_PIN && localStorage.getItem("fh-unlocked") === EDIT_PIN) unlocked = true; } catch {}
-const params = { year: null, a: null, b: null, dyear: null, dview: "board", dpos: "all", dmgr: "all", dq: "", tyear: "all", tmgr: "all", tq: "" };
+const params = { year: null, a: null, b: null, dyear: null, dview: "board", dpos: "all", dmgr: "all", dq: "", tyear: "all", tmgr: "all", tq: "", ht: "all" };
 let draft = newDraft();
 
 const use = (name) => (window.claude && window.claude.use ? window.claude.use(name).catch(() => null) : Promise.resolve(null));
@@ -945,7 +1031,7 @@ const pages = {
   draft: ["Draft", (c, p) => draftView(c, p)],
   trades: ["Trades", (c, p) => tradesView(c, p)],
   alltime: ["All-time", (c) => allTimeView(c)],
-  h2h: ["Head-to-head", (c, p) => h2hView(c, p.a, p.b)],
+  h2h: ["Head-to-head", (c, p) => h2hView(c, p)],
   records: ["Records", (c) => recordsView(c)],
   managers: ["Managers", (c) => managersView(c)],
   data: ["Add data", () => dataView()],
@@ -1145,8 +1231,9 @@ document.addEventListener("change", (e) => {
   if (t.id === "draft-pos") { params.dpos = t.value; return render(); }
   if (t.id === "draft-mgr") { params.dmgr = t.value; return render(); }
   if (t.id === "year-select") { params.year = Number(t.value); return render(); }
-  if (t.id === "h2h-a") { params.a = t.value; return render(); }
+  if (t.id === "h2h-a") { params.a = t.value; if (params.b === t.value) params.b = "all"; return render(); }
   if (t.id === "h2h-b") { params.b = t.value; return render(); }
+  if (t.id === "h2h-type") { params.ht = t.value; return render(); }
   if (t.id === "restore") { const f = t.files[0]; if (f) restoreFrom(f); t.value = ""; return; }
   if (t.id === "g-year") { loadGames(Number(t.value)); return render(); }
   if (t.id === "gshots") { gFiles = [...t.files]; return render(); }
@@ -1168,6 +1255,7 @@ document.addEventListener("click", (e) => {
     render();
   }
   else if (act === "clear") { draft = newDraft(); pendingFiles = []; status = ""; render(); }
+  else if (act === "h2h-open") { params.b = b.dataset.opp; render(); window.scrollTo({ top: 0 }); }
   else if (act === "gaddrow") {
     const last = gdraft.games[gdraft.games.length - 1];
     gdraft.games.push({ week: last ? last.week : "1", type: last ? last.type : "regular", home: "", homeScore: "", away: "", awayScore: "" });
