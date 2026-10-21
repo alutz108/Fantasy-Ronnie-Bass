@@ -222,6 +222,14 @@ tbody tr:hover { background: var(--gold-soft); }
 .card.manager { border-top: 3px solid var(--gold); }
 .trade { border-left: 3px solid var(--gold); }
 
+/* sortable columns */
+th.sortable { cursor: pointer; user-select: none; -webkit-user-select: none; }
+th.sortable:hover { color: var(--navy); }
+th.sortable:focus-visible { outline: 2px solid var(--gold); outline-offset: -2px; }
+th.sortable::after { content: "\2195"; margin-left: 5px; font-size: 11px; opacity: .35; }
+th.sortable[aria-sort="ascending"]::after { content: "\25B2"; opacity: 1; color: var(--gold); }
+th.sortable[aria-sort="descending"]::after { content: "\25BC"; opacity: 1; color: var(--gold); }
+
 :root { box-sizing: border-box; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
 html { scroll-padding-top: env(safe-area-inset-top, 0px); }
 
@@ -636,14 +644,14 @@ function recordsView(ctx) {
   const gameRow = (s) => [`<strong>${f1(s.score)}</strong>`, esc(s.team), `<span class="muted">vs ${esc(s.opp)}</span>`, when(s.year, s.week)];
   const marginRow = (g) => [`<strong>${f1(g.margin)}</strong>`, esc(g.winner.team), `<span class="muted">over ${esc(g.loser.team)}</span>`, when(g.year, g.week)];
   const streakRow = (s) => [`<strong>${s.length}</strong>`, esc(s.manager), `${when(s.from.year, s.from.week)} to ${when(s.to.year, s.to.week)}`];
-  const H = ["", "Team", "", "When"];
+  const HS = ["Score", "Team", "Opponent", "When"], HM = ["Margin", "Winner", "Loser", "When"];
   const pfSection = section("Most points in a season", table(["PF", "Team", "Manager", "Year"], r.seasonPF.map((s) => [`<strong>${f1(s.pf)}</strong>`, esc(s.team), esc(s.manager), esc(s.year)])));
   if (!hasGames) return `<div class="grid">${pfSection}</div><p class="muted">Single-game records and streaks need weekly scores, which haven’t been added yet.</p>`;
   return `<div class="grid">
-    ${section("Highest score", table(H, r.highScores.map(gameRow)))}
-    ${section("Lowest score", table(H, r.lowScores.map(gameRow)))}
-    ${section("Biggest blowouts", table(H, r.biggestMargins.map(marginRow)))}
-    ${section("Closest games", table(H, r.closestGames.map(marginRow)))}
+    ${section("Highest score", table(HS, r.highScores.map(gameRow)))}
+    ${section("Lowest score", table(HS, r.lowScores.map(gameRow)))}
+    ${section("Biggest blowouts", table(HM, r.biggestMargins.map(marginRow)))}
+    ${section("Closest games", table(HM, r.closestGames.map(marginRow)))}
     ${section("Most points in a season", table(["PF", "Team", "Manager", "Year"], r.seasonPF.map((s) => [`<strong>${f1(s.pf)}</strong>`, esc(s.team), esc(s.manager), esc(s.year)])))}
     ${section("Longest win streaks", table(["Games", "Manager", "Span"], r.winStreaks.map(streakRow)), "Streaks carry across seasons.")}
     ${section("Longest losing streaks", table(["Games", "Manager", "Span"], r.loseStreaks.map(streakRow)))}
@@ -1288,6 +1296,7 @@ function render() {
   document.title = `${pages[key][0]} | ${(typeof SITE_NAME !== "undefined" && SITE_NAME) || "League History"}`;
   const foot = document.querySelector("footer");
   if (foot) foot.textContent = liveNote || "Fantasy football league history";
+  enhanceTables();
 }
 
 /* ---------- actions ---------- */
@@ -1444,7 +1453,7 @@ document.addEventListener("input", (e) => {
   if (e.target.id === "draft-q") {
     params.dq = e.target.value;
     const body = document.querySelector("#draft-body");
-    if (body) body.innerHTML = draftBody(ctx, params);
+    if (body) { body.innerHTML = draftBody(ctx, params); enhanceTables(); }
     return;
   }
   const gk = e.target.dataset && e.target.dataset.g;
@@ -1478,6 +1487,8 @@ document.addEventListener("change", (e) => {
 });
 
 document.addEventListener("click", (e) => {
+  const sortTh = e.target.closest("th.sortable");
+  if (sortTh) { clickSort(sortTh); return; }
   if (e.target.closest(".drawer-links a")) setMenu(false);
   const b = e.target.closest("button[data-act]");
   if (!b) return;
@@ -1525,6 +1536,68 @@ document.addEventListener("click", (e) => {
     window.scrollTo({ top: 0 });
   }
 });
+// ---- click a column title to sort a table ----
+const sortState = new Map();   // "page:table number" -> { col, dir }, so a sort survives filters and live updates
+function sortCell(td) {
+  const t = (td.textContent || "").replace(/\s+/g, " ").trim();
+  if (!t || t === "-" || /^(not decided|none)$/i.test(t)) return { blank: true, txt: "", num: null };
+  let m;
+  if ((m = t.match(/^(\d+)-(\d+)(?:-(\d+))?$/))) { const w = +m[1], l = +m[2], x = +(m[3] || 0), g = w + l + x; return { num: g ? (w + x / 2) / g : 0, sec: w, txt: t }; }   // a record sorts by win %
+  if ((m = t.match(/^(\d{4}) wk (\d+)/))) return { num: +m[1] * 100 + +m[2], txt: t };                                                        // "2023 wk 9" sorts by date
+  if ((m = t.match(/^(\d[\d,]*\.?\d*)\s+-\s+\d/))) return { num: parseFloat(m[1].replace(/,/g, "")), txt: t };                              // "112.3 - 98.1" sorts by the first score
+  if ((m = t.match(/^[^\d.\-]*(-?\d[\d,]*\.?\d*|-?\.\d+)\s*[^\d\w]*$/))) return { num: parseFloat(m[1].replace(/,/g, "")), txt: t };
+  return { num: null, txt: t.replace(/^[^\p{L}\p{N}]+/u, "") };
+}
+function sortTable(table, col, dir) {
+  const body = table.tBodies[0];
+  if (!body) return;
+  const rows = [...body.rows].map((r, i) => ({ r, i, v: sortCell(r.cells[col] || r) }));
+  const filled = rows.filter((x) => !x.v.blank);
+  const numeric = filled.length > 0 && filled.filter((x) => x.v.num !== null).length / filled.length >= 0.6;
+  const sign = dir === "asc" ? 1 : -1;
+  rows.sort((a, b) => {
+    if (a.v.blank !== b.v.blank) return a.v.blank ? 1 : -1;      // empty cells always go last
+    if (a.v.blank) return a.i - b.i;
+    let c;
+    if (numeric) { c = (a.v.num ?? -Infinity) - (b.v.num ?? -Infinity); if (c === 0 && a.v.sec !== undefined) c = a.v.sec - b.v.sec; }
+    else c = a.v.txt.localeCompare(b.v.txt, undefined, { numeric: true, sensitivity: "base" });
+    return c ? c * sign : a.i - b.i;
+  });
+  rows.forEach((x) => body.appendChild(x.r));
+}
+function enhanceTables() {
+  const view = document.querySelector("#view");
+  if (!view) return;
+  const tables = [...view.querySelectorAll("table")];
+  tables.forEach((table, n) => {
+    if (table.closest(".board, .hb, .entry") || !table.tBodies[0] || table.tBodies[0].rows.length < 2) return;
+    const key = (location.hash || "#champions") + ":" + n;
+    const st = sortState.get(key);
+    [...table.tHead.rows[0].cells].forEach((th, i) => {
+      if (!th.textContent.trim()) return;
+      th.classList.add("sortable"); th.tabIndex = 0; th.dataset.col = i; th.dataset.key = key;
+      th.setAttribute("aria-sort", st && st.col === i ? (st.dir === "asc" ? "ascending" : "descending") : "none");
+    });
+    if (st && st.col < table.tHead.rows[0].cells.length) sortTable(table, st.col, st.dir);
+  });
+}
+function clickSort(th) {
+  const table = th.closest("table"), col = Number(th.dataset.col), key = th.dataset.key;
+  const cur = sortState.get(key);
+  let dir;
+  if (cur && cur.col === col) dir = cur.dir === "asc" ? "desc" : "asc";
+  else {   // first click: text A to Z, numbers biggest first
+    const filled = [...table.tBodies[0].rows].map((r) => sortCell(r.cells[col])).filter((v) => !v.blank);
+    dir = filled.length && filled.filter((v) => v.num !== null).length / filled.length >= 0.6 ? "desc" : "asc";
+  }
+  sortState.set(key, { col, dir });
+  [...table.tHead.rows[0].cells].forEach((c, i) => { if (c.classList.contains("sortable")) c.setAttribute("aria-sort", i === col ? (dir === "asc" ? "ascending" : "descending") : "none"); });
+  sortTable(table, col, dir);
+}
+document.addEventListener("keydown", (e) => {
+  if ((e.key === "Enter" || e.key === " ") && e.target.classList && e.target.classList.contains("sortable")) { e.preventDefault(); clickSort(e.target); }
+});
+
 // phone menu (hamburger): a slide-in panel with the same links as the tab bar
 function setMenu(open) {
   const drawer = document.querySelector("#drawer"), btn = document.querySelector("#menu-btn");
