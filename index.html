@@ -540,16 +540,21 @@ function standingsView(ctx, year) {
   const y = years.includes(year) ? year : years[0];
   const select = `<label class="inline">Season <select id="year-select">${years
     .map((v) => `<option value="${v}"${v === y ? " selected" : ""}>${v}</option>`).join("")}</select></label>`;
-  const rows = standings(ctx, y).map((t) => [
+  const list = standings(ctx, y);
+  // seasons we can read live from Sleeper carry each team's full-roster total (starters + bench, no IR or taxi)
+  const hasBench = list.length > 0 && list.every((t) => t.rosterPts !== null && t.rosterPts !== undefined);
+  const rows = list.map((t) => [
     esc(t.rank),
     `${t.champion ? trophy + " " : ""}<strong>${esc(t.name)}</strong>`,
     esc(t.manager),
     rec(t.wins, t.losses, t.ties),
     f1(t.pf), f1(t.pa),
-    t.finalRank ? esc(t.finalRank) : `<span class="muted">-</span>`,
+    hasBench ? `<strong>${f1(t.rosterPts)}</strong>` : t.finalRank ? esc(t.finalRank) : `<span class="muted">-</span>`,
   ]);
-  return section(`${y} standings`, select + table(["#", "Team", "Manager", "Record", "PF", "PA", "Final"], rows),
-    "Order is regular-season record, then points for. Final is the playoff finish where the platform reports it.");
+  const note = hasBench
+    ? "Order is regular-season record, then points for. Total pts adds each week’s starters and bench players for the regular season. IR and taxi squad players are not counted."
+    : "Order is regular-season record, then points for. Final is the playoff finish where the platform reports it.";
+  return section(`${y} standings`, select + table(["#", "Team", "Manager", "Record", "PF", "PA", hasBench ? "Total pts (incl. bench)" : "Final"], rows), note);
 }
 
 function allTimeView(ctx) {
@@ -1024,7 +1029,7 @@ function toHistory(docs, gdocs, drafts) {
       return {
         teamId: i + 1, name: t.name || `Team ${i + 1}`, ownerNames: [mname], managerId: id,
         wins: +t.wins || 0, losses: +t.losses || 0, ties: +t.ties || 0, pf: +t.pf || 0, pa: +t.pa || 0,
-        finalRank: i === d.champIdx ? 1 : i === d.runnerIdx ? 2 : null, playoffSeed: null,
+        finalRank: i === d.champIdx ? 1 : i === d.runnerIdx ? 2 : null, playoffSeed: null, rosterPts: t.rosterPts === undefined ? null : t.rosterPts,
       };
     });
     const byName = new Map(teams.map((t) => [norm(t.name), t]));
@@ -1565,6 +1570,8 @@ const SLEEPER_API = "https://api.sleeper.app/v1";
 function sleeperToDocs(raw, names) {
   const { league, users, rosters, bracket, matchups, drafts } = raw;
   const playerNames = arguments[2] || {};
+  // total roster points (starters + bench, never IR or taxi) are only used when they check out against Sleeper's own starter scores
+  const rosterTotals = raw.rosterTotals && raw.rosterTotals.ok ? raw.rosterTotals.totals : null;
   const nameMap = names || {};
   const year = Number(league.season);
   const start = (league.settings && league.settings.playoff_week_start) || 15;
@@ -1578,6 +1585,7 @@ function sleeperToDocs(raw, names) {
     const st = r.settings || {};
     idx.set(r.roster_id, i);
     return { name: tname, manager: nameMap[uname] || uname, wins: st.wins || 0, losses: st.losses || 0, ties: st.ties || 0,
+      ...(rosterTotals ? { rosterPts: Math.round(((rosterTotals[r.roster_id] && rosterTotals[r.roster_id].total) || 0) * 100) / 100 } : {}),
       pf: Math.round(((st.fpts || 0) + (st.fpts_decimal || 0) / 100) * 100) / 100,
       pa: Math.round(((st.fpts_against || 0) + (st.fpts_against_decimal || 0) / 100) * 100) / 100 };
   });
@@ -1674,6 +1682,27 @@ async function sleeperFetchRaw(id) {
     sleeperGet(`/league/${id}/winners_bracket`).catch(() => []),
   ]);
   const weeks = await Promise.all(Array.from({ length: 18 }, (_, i) => sleeperGet(`/league/${id}/matchups/${i + 1}`).catch(() => [])));
+  // Every week's full roster points: starters always count; bench players count; players on IR or taxi do not.
+  const startWeek = (league.settings && league.settings.playoff_week_start) || 15;
+  const skip = new Map(rosters.map((r) => [r.roster_id, new Set([...(r.reserve || []), ...(r.taxi || [])].map(String))]));
+  const totals = {};
+  let checked = 0, matched = 0;
+  weeks.forEach((m, i) => {
+    if (i + 1 >= startWeek || !Array.isArray(m)) return;
+    for (const x of m) {
+      const pp = x.players_points || {};
+      const starters = (x.starters || []).filter((p) => p && p !== "0").map(String);
+      const starterSet = new Set(starters);
+      const out = skip.get(x.roster_id) || new Set();
+      let starterPts = 0, benchPts = 0;
+      for (const p of starters) starterPts += pp[p] || 0;
+      for (const p of x.players || []) if (!starterSet.has(String(p)) && !out.has(String(p))) benchPts += pp[p] || 0;
+      const t = totals[x.roster_id] || (totals[x.roster_id] = { total: 0 });
+      t.total += starterPts + benchPts;
+      if ((x.points || 0) > 0) { checked++; if (Math.abs(starterPts - (x.points || 0)) <= 0.6) matched++; }
+    }
+  });
+  const rosterTotals = { ok: checked > 0 && matched / checked >= 0.9, checked, matched, totals };
   const matchups = {};
   weeks.forEach((m, i) => {
     if (Array.isArray(m) && m.length) matchups[i + 1] = m.map((x) => ({ roster_id: x.roster_id, matchup_id: x.matchup_id, points: x.points }));
@@ -1685,7 +1714,7 @@ async function sleeperFetchRaw(id) {
   }
   const txw = await Promise.all(Array.from({ length: 19 }, (_, i) => sleeperGet(`/league/${id}/transactions/${i}`).catch(() => [])));
   const transactions = txw.flat().filter((t) => t && t.type === "trade");
-  return { league, users, rosters, bracket, matchups, drafts, transactions };
+  return { league, users, rosters, bracket, matchups, drafts, transactions, rosterTotals };
 }
 
 // Next year's league (created when the new season starts) points back at this one.
