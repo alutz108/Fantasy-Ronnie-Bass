@@ -170,6 +170,37 @@ h1.brand .tag { font-size: 15px; line-height: 1.2; }
 .done { font-size: 11px; border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; margin-left: 4px; }
 .hb-order td:first-child { text-align: center; width: 54px; }
 
+/* phone menu */
+.topbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.menu-btn { display: none; flex-direction: column; justify-content: center; gap: 5px; width: 44px; height: 44px; padding: 0 11px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); cursor: pointer; flex: none; }
+.menu-btn span { display: block; height: 2px; border-radius: 2px; background: var(--text); }
+.drawer { display: none; }
+@media (max-width: 720px) {
+  header { padding: 8px 14px 8px; }
+  nav#nav { display: none; }
+  .menu-btn { display: flex; }
+  h1.brand { margin: 0; gap: 10px; min-width: 0; }
+  h1.brand .logo { height: 44px; }
+  h1.brand .tag { font-size: 12px; letter-spacing: .04em; }
+  main { padding: 12px; }
+  .drawer { display: block; position: fixed; inset: 0; z-index: 50; visibility: hidden; transition: visibility 0s linear .25s; }
+  .drawer.open { visibility: visible; transition-delay: 0s; }
+  .drawer-backdrop { position: absolute; inset: 0; width: 100%; border: 0; padding: 0; background: rgba(0, 0, 0, .5); opacity: 0; transition: opacity .25s; cursor: pointer; }
+  .drawer.open .drawer-backdrop { opacity: 1; }
+  .drawer-panel { position: absolute; top: 0; right: 0; bottom: 0; width: min(82vw, 320px); background: var(--card); border-left: 1px solid var(--line); box-shadow: -8px 0 24px rgba(0, 0, 0, .25);
+    display: flex; flex-direction: column; transform: translateX(100%); transition: transform .25s ease; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+  .drawer.open .drawer-panel { transform: none; }
+  .drawer-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+  .drawer-head img { height: 48px; width: auto; }
+  .drawer-close { font: inherit; font-size: 26px; line-height: 1; width: 44px; height: 44px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--text); cursor: pointer; }
+  .drawer-links { overflow-y: auto; flex: 1; }
+  .drawer-links a { display: block; padding: 15px 20px; font-size: 17px; color: var(--text); text-decoration: none; border-bottom: 1px solid var(--line); border-left: 4px solid transparent; }
+  .drawer-links a.active { background: var(--accent-soft); border-left-color: var(--accent); color: var(--accent); font-weight: 700; }
+  .drawer-foot { padding: 12px 20px; font-size: 12px; color: var(--muted); border-top: 1px solid var(--line); }
+  body.menu-open { overflow: hidden; }
+}
+@media (prefers-reduced-motion: reduce) { .drawer-panel, .drawer-backdrop { transition: none; } }
+
 :root { box-sizing: border-box; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
 html { scroll-padding-top: env(safe-area-inset-top, 0px); }
 
@@ -177,9 +208,20 @@ html { scroll-padding-top: env(safe-area-inset-top, 0px); }
 </head>
 <body>
 <header>
-  <h1 class="brand"><img class="logo" src="logo.png" alt="Ronnie Bass Fantasy Football" width="60" height="56"><span id="league-name" class="tag" data-fixed="1">The Ronnie Bass Fantasy Football League</span></h1>
+  <div class="topbar">
+    <h1 class="brand"><img class="logo" src="logo.png" alt="Ronnie Bass Fantasy Football" width="60" height="56"><span id="league-name" class="tag" data-fixed="1">The Ronnie Bass Fantasy Football League</span></h1>
+    <button id="menu-btn" class="menu-btn" data-act="menu-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="drawer"><span></span><span></span><span></span></button>
+  </div>
   <nav id="nav"></nav>
 </header>
+<div id="drawer" class="drawer">
+  <button class="drawer-backdrop" data-act="menu-close" aria-label="Close menu" tabindex="-1"></button>
+  <aside class="drawer-panel" aria-label="Menu">
+    <div class="drawer-head"><img src="logo.png" alt="Ronnie Bass Fantasy Football"><button class="drawer-close" data-act="menu-close" aria-label="Close menu">&times;</button></div>
+    <nav id="drawer-links" class="drawer-links" aria-label="Sections"></nav>
+    <div class="drawer-foot">The Ronnie Bass Fantasy Football League</div>
+  </aside>
+</div>
 <main id="view"><p class="muted">Loading...</p></main>
 <footer>Fantasy football league history</footer>
 <script>
@@ -1210,9 +1252,12 @@ function render() {
   const wanted = location.hash.slice(1);
   const key = pages[wanted] && !(READ_ONLY && (wanted === "data" || wanted === "scores")) ? wanted : "champions";
   const hasDrafts = draftYears(ctx).length > 0;
-  document.querySelector("#nav").innerHTML = Object.entries(pages)
+  const navLinks = Object.entries(pages)
     .filter(([k]) => (k !== "draft" || hasDrafts) && (k !== "trades" || (ctx.data.trades || []).length > 0) && !(READ_ONLY && (k === "data" || k === "scores")))
     .map(([k, [label]]) => `<a href="#${k}"${k === key ? ' class="active"' : ""}>${label}</a>`).join("");
+  document.querySelector("#nav").innerHTML = navLinks;
+  const drawerLinks = document.querySelector("#drawer-links");
+  if (drawerLinks) drawerLinks.innerHTML = navLinks;
   const banner = ctx.data.sample && key !== "data"
     ? `<div class="banner">Showing <strong>sample data</strong>. Open <a href="#data">Add data</a> to enter your league’s real history.</div>` : "";
   document.querySelector("#view").innerHTML = banner + pages[key][1](ctx, params);
@@ -1411,6 +1456,7 @@ document.addEventListener("change", (e) => {
 });
 
 document.addEventListener("click", (e) => {
+  if (e.target.closest(".drawer-links a")) setMenu(false);
   const b = e.target.closest("button[data-act]");
   if (!b) return;
   const act = b.dataset.act;
@@ -1424,6 +1470,8 @@ document.addEventListener("click", (e) => {
   }
   else if (act === "clear") { draft = newDraft(); pendingFiles = []; status = ""; render(); }
   else if (act === "hb-jump") { const el = document.getElementById(b.dataset.target); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); }
+  else if (act === "menu-toggle") setMenu(!document.querySelector("#drawer").classList.contains("open"));
+  else if (act === "menu-close") setMenu(false);
   else if (act === "hb-top") window.scrollTo({ top: 0, behavior: "smooth" });
   else if (act === "h2h-open") { params.b = b.dataset.opp; render(); window.scrollTo({ top: 0 }); }
   else if (act === "gaddrow") {
@@ -1455,7 +1503,17 @@ document.addEventListener("click", (e) => {
     window.scrollTo({ top: 0 });
   }
 });
-window.addEventListener("hashchange", () => { status = ""; confirmDel = null; confirmDelGames = null; render(); });
+// phone menu (hamburger): a slide-in panel with the same links as the tab bar
+function setMenu(open) {
+  const drawer = document.querySelector("#drawer"), btn = document.querySelector("#menu-btn");
+  if (!drawer) return;
+  drawer.classList.toggle("open", open);
+  document.body.classList.toggle("menu-open", open);
+  if (btn) { btn.setAttribute("aria-expanded", String(open)); btn.setAttribute("aria-label", open ? "Close menu" : "Open menu"); }
+  if (open) { const x = drawer.querySelector(".drawer-close"); if (x) x.focus(); } else if (btn && document.activeElement && drawer.contains(document.activeElement)) btn.focus();
+}
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") setMenu(false); });
+window.addEventListener("hashchange", () => { status = ""; confirmDel = null; confirmDelGames = null; setMenu(false); render(); });
 
 /* ---------- start ---------- */
 mergeData();
