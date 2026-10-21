@@ -1,0 +1,970 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>League History</title>
+<style>
+/* Colors and sizes live in these variables: change them here to restyle the whole site. */
+:root {
+  --bg: #f6f7f9;
+  --card: #ffffff;
+  --text: #1c2330;
+  --muted: #6b7686;
+  --line: #e3e7ed;
+  --accent: #1f6f4a;
+  --accent-soft: #e2f3ea;
+  --win: #d9f2e3;
+  --loss: #fbe0e0;
+  --even: #eef0f3;
+  --radius: 12px;
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11151b; --card: #1a2029; --text: #e8ecf1; --muted: #93a0b2; --line: #2a3340;
+    --accent: #5cc796; --accent-soft: #1d3a2d; --win: #1e4a35; --loss: #5a2a2a; --even: #262e3a;
+  }
+}
+:root[data-theme="dark"] {
+    --bg: #11151b; --card: #1a2029; --text: #e8ecf1; --muted: #93a0b2; --line: #2a3340;
+    --accent: #5cc796; --accent-soft: #1d3a2d; --win: #1e4a35; --loss: #5a2a2a; --even: #262e3a;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 var(--font); }
+header { background: var(--card); border-bottom: 1px solid var(--line); padding: 14px 20px 0; position: sticky; top: 0; z-index: 5; }
+h1 { margin: 0 0 8px; font-size: 20px; }
+nav { display: flex; gap: 4px; overflow-x: auto; }
+nav a { padding: 8px 14px; color: var(--muted); text-decoration: none; border-bottom: 3px solid transparent; white-space: nowrap; }
+nav a.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+main { max-width: 1100px; margin: 0 auto; padding: 20px; }
+footer { text-align: center; color: var(--muted); font-size: 13px; padding: 24px; }
+h2 { margin: 0 0 12px; font-size: 17px; }
+h3 { margin: 0 0 8px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; margin-bottom: 16px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(440px, 1fr)); gap: 0 16px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 16px; }
+.cards .card { margin: 0; }
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+tbody tr:hover { background: var(--accent-soft); }
+.matrix td, .matrix th { text-align: center; }
+.matrix td:first-child, .matrix th:first-child { text-align: left; }
+.pill { display: inline-block; padding: 2px 8px; border-radius: 99px; font-size: 13px; }
+.pill.win { background: var(--win); } .pill.loss { background: var(--loss); } .pill.even { background: var(--even); }
+.muted { color: var(--muted); }
+.note { color: var(--muted); font-size: 13px; margin: -6px 0 12px; }
+.big { font-size: 17px; font-weight: 600; }
+.pickers { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+label.inline { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+select { font: inherit; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--text); }
+.banner { background: var(--accent-soft); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 14px; margin-bottom: 16px; }
+.banner.error { background: var(--loss); }
+code { background: var(--even); padding: 1px 6px; border-radius: 6px; }
+.manager dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; margin: 8px 0 0; }
+.manager dt { color: var(--muted); } .manager dd { margin: 0; text-align: right; }
+.trophies { min-height: 24px; }
+@media (max-width: 520px) { .grid { grid-template-columns: 1fr; } main { padding: 12px; } }
+
+/* data entry */
+.btn { font: inherit; padding: 7px 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--text); cursor: pointer; display: inline-block; }
+.btn:hover { background: var(--accent-soft); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.danger { color: #c0392b; }
+.btn.small { padding: 2px 9px; }
+.btn[disabled] { opacity: .6; cursor: default; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 0; }
+.actions { text-align: right; }
+.center { text-align: center; }
+input, textarea { font: inherit; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--text); }
+textarea { width: 100%; }
+.entry input { width: 100%; }
+.entry td, .entry th { padding: 4px 6px; }
+.w-team { min-width: 150px; } .w-mgr { min-width: 110px; } .w-num { min-width: 44px; max-width: 60px; } .w-pts { min-width: 72px; } .w-year { width: 90px; }
+.autofill { background: var(--accent-soft); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 14px; }
+.autofill h3 { margin: 0 0 4px; font-size: 15px; }
+.banner a { color: var(--accent); }
+.bad { border-color: #c0392b !important; background: var(--loss) !important; }
+.w-week { min-width: 48px; max-width: 64px; } .w-score { min-width: 76px; max-width: 96px; }
+
+:root { box-sizing: border-box; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+
+</style>
+</head>
+<body>
+<header>
+  <h1>🏈 <span id="league-name">League History</span></h1>
+  <nav id="nav"></nav>
+</header>
+<main id="view"><p class="muted">Loading...</p></main>
+<footer>Fantasy football league history</footer>
+<script src="config.js"></script>
+<script>
+const CONFIG = (typeof LEAGUE_SETTINGS !== "undefined" && LEAGUE_SETTINGS) || { firebase: null, editPin: "" };
+const DATA = {"generatedAt":"2026-10-21T13:30:09.053Z","sample":true,"managers":[{"id":"sample:sample-0","name":"Alex"},{"id":"sample:sample-1","name":"Brian"},{"id":"sample:sample-2","name":"Chris"},{"id":"sample:sample-3","name":"Dana"},{"id":"sample:sample-4","name":"Eli"},{"id":"sample:sample-5","name":"Frank"},{"id":"sample:sample-6","name":"Gina"},{"id":"sample:sample-7","name":"Hank"},{"id":"sample:sample-8","name":"Ivy"},{"id":"sample:sample-9","name":"Jake"}],"seasons":[{"year":2018,"platform":"sample","leagueName":"Sample League","status":"complete","championTeamId":8,"championManagerId":"sample:sample-7","teams":[{"teamId":1,"name":"Gridiron Ghosts","ownerNames":["Alex"],"wins":7,"losses":7,"ties":0,"pf":1495.5,"pa":1512.1,"finalRank":6,"playoffSeed":null,"managerId":"sample:sample-0"},{"teamId":2,"name":"Blitz Krieg","ownerNames":["Brian"],"wins":9,"losses":5,"ties":0,"pf":1553.9,"pa":1525.4,"finalRank":3,"playoffSeed":1,"managerId":"sample:sample-1"},{"teamId":3,"name":"Fourth & Long","ownerNames":["Chris"],"wins":6,"losses":8,"ties":0,"pf":1447.3,"pa":1491.8,"finalRank":7,"playoffSeed":null,"managerId":"sample:sample-2"},{"teamId":4,"name":"Hail Marys","ownerNames":["Dana"],"wins":6,"losses":7,"ties":1,"pf":1432.1,"pa":1470.6,"finalRank":8,"playoffSeed":null,"managerId":"sample:sample-3"},{"teamId":5,"name":"Pocket Aces","ownerNames":["Eli"],"wins":4,"losses":10,"ties":0,"pf":1439.4,"pa":1444.8,"finalRank":10,"playoffSeed":null,"managerId":"sample:sample-4"},{"teamId":6,"name":"Red Zone Rebels","ownerNames":["Frank"],"wins":8,"losses":5,"ties":1,"pf":1483.5,"pa":1501.3,"finalRank":2,"playoffSeed":3,"managerId":"sample:sample-5"},{"teamId":7,"name":"Sack Attack","ownerNames":["Gina"],"wins":9,"losses":4,"ties":1,"pf":1492,"pa":1462.4,"finalRank":4,"playoffSeed":2,"managerId":"sample:sample-6"},{"teamId":8,"name":"Tight End Zone","ownerNames":["Hank"],"wins":7,"losses":6,"ties":1,"pf":1544,"pa":1491.3,"finalRank":1,"playoffSeed":4,"managerId":"sample:sample-7"},{"teamId":9,"name":"Waiver Wire Warriors","ownerNames":["Ivy"],"wins":7,"losses":7,"ties":0,"pf":1504.9,"pa":1444.3,"finalRank":5,"playoffSeed":null,"managerId":"sample:sample-8"},{"teamId":10,"name":"Punt Gods","ownerNames":["Jake"],"wins":5,"losses":9,"ties":0,"pf":1445.4,"pa":1494,"finalRank":9,"playoffSeed":null,"managerId":"sample:sample-9"}],"matchups":[{"week":1,"type":"regular","home":{"teamId":1,"score":111.9,"managerId":"sample:sample-0"},"away":{"teamId":2,"score":114.4,"managerId":"sample:sample-1"}},{"week":1,"type":"regular","home":{"teamId":3,"score":106.2,"managerId":"sample:sample-2"},"away":{"teamId":10,"score":79.2,"managerId":"sample:sample-9"}},{"week":1,"type":"regular","home":{"teamId":4,"score":75.9,"managerId":"sample:sample-3"},"away":{"teamId":9,"score":107.1,"managerId":"sample:sample-8"}},{"week":1,"type":"regular","home":{"teamId":5,"score":82.9,"managerId":"sample:sample-4"},"away":{"teamId":8,"score":100.5,"managerId":"sample:sample-7"}},{"week":1,"type":"regular","home":{"teamId":6,"score":97,"managerId":"sample:sample-5"},"away":{"teamId":7,"score":117,"managerId":"sample:sample-6"}},{"week":2,"type":"regular","home":{"teamId":1,"score":91.8,"managerId":"sample:sample-0"},"away":{"teamId":3,"score":102.4,"managerId":"sample:sample-2"}},{"week":2,"type":"regular","home":{"teamId":4,"score":128.9,"managerId":"sample:sample-3"},"away":{"teamId":2,"score":104.9,"managerId":"sample:sample-1"}},{"week":2,"type":"regular","home":{"teamId":5,"score":134.7,"managerId":"sample:sample-4"},"away":{"teamId":10,"score":89.3,"managerId":"sample:sample-9"}},{"week":2,"type":"regular","home":{"teamId":6,"score":110.4,"managerId":"sample:sample-5"},"away":{"teamId":9,"score":110,"managerId":"sample:sample-8"}},{"week":2,"type":"regular","home":{"teamId":7,"score":101.9,"managerId":"sample:sample-6"},"away":{"teamId":8,"score":101.9,"managerId":"sample:sample-7"}},{"week":3,"type":"regular","home":{"teamId":1,"score":114.6,"managerId":"sample:sample-0"},"away":{"teamId":4,"score":98.3,"managerId":"sample:sample-3"}},{"week":3,"type":"regular","home":{"teamId":5,"score":83.3,"managerId":"sample:sample-4"},"away":{"teamId":3,"score":98.6,"managerId":"sample:sample-2"}},{"week":3,"type":"regular","home":{"teamId":6,"score":96.6,"managerId":"sample:sample-5"},"away":{"teamId":2,"score":116.8,"managerId":"sample:sample-1"}},{"week":3,"type":"regular","home":{"teamId":7,"score":81.3,"managerId":"sample:sample-6"},"away":{"teamId":10,"score":70.9,"managerId":"sample:sample-9"}},{"week":3,"type":"regular","home":{"teamId":8,"score":111.9,"managerId":"sample:sample-7"},"away":{"teamId":9,"score":121.3,"managerId":"sample:sample-8"}},{"week":4,"type":"regular","home":{"teamId":1,"score":108.2,"managerId":"sample:sample-0"},"away":{"teamId":5,"score":133.4,"managerId":"sample:sample-4"}},{"week":4,"type":"regular","home":{"teamId":6,"score":85.1,"managerId":"sample:sample-5"},"away":{"teamId":4,"score":153.1,"managerId":"sample:sample-3"}},{"week":4,"type":"regular","home":{"teamId":7,"score":112.8,"managerId":"sample:sample-6"},"away":{"teamId":3,"score":111.5,"managerId":"sample:sample-2"}},{"week":4,"type":"regular","home":{"teamId":8,"score":113,"managerId":"sample:sample-7"},"away":{"teamId":2,"score":73.9,"managerId":"sample:sample-1"}},{"week":4,"type":"regular","home":{"teamId":9,"score":120.2,"managerId":"sample:sample-8"},"away":{"teamId":10,"score":98.7,"managerId":"sample:sample-9"}},{"week":5,"type":"regular","home":{"teamId":1,"score":79.1,"managerId":"sample:sample-0"},"away":{"teamId":6,"score":87.2,"managerId":"sample:sample-5"}},{"week":5,"type":"regular","home":{"teamId":7,"score":104.1,"managerId":"sample:sample-6"},"away":{"teamId":5,"score":86.7,"managerId":"sample:sample-4"}},{"week":5,"type":"regular","home":{"teamId":8,"score":126.2,"managerId":"sample:sample-7"},"away":{"teamId":4,"score":85.4,"managerId":"sample:sample-3"}},{"week":5,"type":"regular","home":{"teamId":9,"score":110.1,"managerId":"sample:sample-8"},"away":{"teamId":3,"score":90,"managerId":"sample:sample-2"}},{"week":5,"type":"regular","home":{"teamId":10,"score":124,"managerId":"sample:sample-9"},"away":{"teamId":2,"score":125.5,"managerId":"sample:sample-1"}},{"week":6,"type":"regular","home":{"teamId":1,"score":131.8,"managerId":"sample:sample-0"},"away":{"teamId":7,"score":136.2,"managerId":"sample:sample-6"}},{"week":6,"type":"regular","home":{"teamId":8,"score":110.5,"managerId":"sample:sample-7"},"away":{"teamId":6,"score":122.8,"managerId":"sample:sample-5"}},{"week":6,"type":"regular","home":{"teamId":9,"score":115.5,"managerId":"sample:sample-8"},"away":{"teamId":5,"score":128.8,"managerId":"sample:sample-4"}},{"week":6,"type":"regular","home":{"teamId":10,"score":105.8,"managerId":"sample:sample-9"},"away":{"teamId":4,"score":92.4,"managerId":"sample:sample-3"}},{"week":6,"type":"regular","home":{"teamId":2,"score":103.6,"managerId":"sample:sample-1"},"away":{"teamId":3,"score":85,"managerId":"sample:sample-2"}},{"week":7,"type":"regular","home":{"teamId":1,"score":117.6,"managerId":"sample:sample-0"},"away":{"teamId":8,"score":92.2,"managerId":"sample:sample-7"}},{"week":7,"type":"regular","home":{"teamId":9,"score":119.7,"managerId":"sample:sample-8"},"away":{"teamId":7,"score":54.6,"managerId":"sample:sample-6"}},{"week":7,"type":"regular","home":{"teamId":10,"score":116.1,"managerId":"sample:sample-9"},"away":{"teamId":6,"score":115.3,"managerId":"sample:sample-5"}},{"week":7,"type":"regular","home":{"teamId":2,"score":107.2,"managerId":"sample:sample-1"},"away":{"teamId":5,"score":104.8,"managerId":"sample:sample-4"}},{"week":7,"type":"regular","home":{"teamId":3,"score":95.2,"managerId":"sample:sample-2"},"away":{"teamId":4,"score":105,"managerId":"sample:sample-3"}},{"week":8,"type":"regular","home":{"teamId":1,"score":102.6,"managerId":"sample:sample-0"},"away":{"teamId":9,"score":109,"managerId":"sample:sample-8"}},{"week":8,"type":"regular","home":{"teamId":10,"score":99.1,"managerId":"sample:sample-9"},"away":{"teamId":8,"score":104.2,"managerId":"sample:sample-7"}},{"week":8,"type":"regular","home":{"teamId":2,"score":105.9,"managerId":"sample:sample-1"},"away":{"teamId":7,"score":91.8,"managerId":"sample:sample-6"}},{"week":8,"type":"regular","home":{"teamId":3,"score":90.9,"managerId":"sample:sample-2"},"away":{"teamId":6,"score":127,"managerId":"sample:sample-5"}},{"week":8,"type":"regular","home":{"teamId":4,"score":96.3,"managerId":"sample:sample-3"},"away":{"teamId":5,"score":90.9,"managerId":"sample:sample-4"}},{"week":9,"type":"regular","home":{"teamId":1,"score":107.7,"managerId":"sample:sample-0"},"away":{"teamId":10,"score":102.8,"managerId":"sample:sample-9"}},{"week":9,"type":"regular","home":{"teamId":2,"score":120.2,"managerId":"sample:sample-1"},"away":{"teamId":9,"score":100.2,"managerId":"sample:sample-8"}},{"week":9,"type":"regular","home":{"teamId":3,"score":126.6,"managerId":"sample:sample-2"},"away":{"teamId":8,"score":168.9,"managerId":"sample:sample-7"}},{"week":9,"type":"regular","home":{"teamId":4,"score":95.9,"managerId":"sample:sample-3"},"away":{"teamId":7,"score":130.5,"managerId":"sample:sample-6"}},{"week":9,"type":"regular","home":{"teamId":5,"score":84.9,"managerId":"sample:sample-4"},"away":{"teamId":6,"score":104.6,"managerId":"sample:sample-5"}},{"week":10,"type":"regular","home":{"teamId":1,"score":118.2,"managerId":"sample:sample-0"},"away":{"teamId":2,"score":116.1,"managerId":"sample:sample-1"}},{"week":10,"type":"regular","home":{"teamId":3,"score":107.8,"managerId":"sample:sample-2"},"away":{"teamId":10,"score":108.5,"managerId":"sample:sample-9"}},{"week":10,"type":"regular","home":{"teamId":4,"score":108.6,"managerId":"sample:sample-3"},"away":{"teamId":9,"score":131.2,"managerId":"sample:sample-8"}},{"week":10,"type":"regular","home":{"teamId":5,"score":75.4,"managerId":"sample:sample-4"},"away":{"teamId":8,"score":79.5,"managerId":"sample:sample-7"}},{"week":10,"type":"regular","home":{"teamId":6,"score":109.4,"managerId":"sample:sample-5"},"away":{"teamId":7,"score":107.8,"managerId":"sample:sample-6"}},{"week":11,"type":"regular","home":{"teamId":1,"score":95.5,"managerId":"sample:sample-0"},"away":{"teamId":3,"score":128.1,"managerId":"sample:sample-2"}},{"week":11,"type":"regular","home":{"teamId":4,"score":128.2,"managerId":"sample:sample-3"},"away":{"teamId":2,"score":106,"managerId":"sample:sample-1"}},{"week":11,"type":"regular","home":{"teamId":5,"score":123.9,"managerId":"sample:sample-4"},"away":{"teamId":10,"score":122.3,"managerId":"sample:sample-9"}},{"week":11,"type":"regular","home":{"teamId":6,"score":104.4,"managerId":"sample:sample-5"},"away":{"teamId":9,"score":89.3,"managerId":"sample:sample-8"}},{"week":11,"type":"regular","home":{"teamId":7,"score":141.4,"managerId":"sample:sample-6"},"away":{"teamId":8,"score":115.3,"managerId":"sample:sample-7"}},{"week":12,"type":"regular","home":{"teamId":1,"score":79.7,"managerId":"sample:sample-0"},"away":{"teamId":4,"score":68.8,"managerId":"sample:sample-3"}},{"week":12,"type":"regular","home":{"teamId":5,"score":96.3,"managerId":"sample:sample-4"},"away":{"teamId":3,"score":96.7,"managerId":"sample:sample-2"}},{"week":12,"type":"regular","home":{"teamId":6,"score":123,"managerId":"sample:sample-5"},"away":{"teamId":2,"score":118.9,"managerId":"sample:sample-1"}},{"week":12,"type":"regular","home":{"teamId":7,"score":85.2,"managerId":"sample:sample-6"},"away":{"teamId":10,"score":119.9,"managerId":"sample:sample-9"}},{"week":12,"type":"regular","home":{"teamId":8,"score":120.2,"managerId":"sample:sample-7"},"away":{"teamId":9,"score":110.4,"managerId":"sample:sample-8"}},{"week":13,"type":"regular","home":{"teamId":1,"score":115.9,"managerId":"sample:sample-0"},"away":{"teamId":5,"score":108.5,"managerId":"sample:sample-4"}},{"week":13,"type":"regular","home":{"teamId":6,"score":86,"managerId":"sample:sample-5"},"away":{"teamId":4,"score":86,"managerId":"sample:sample-3"}},{"week":13,"type":"regular","home":{"teamId":7,"score":121.3,"managerId":"sample:sample-6"},"away":{"teamId":3,"score":91.6,"managerId":"sample:sample-2"}},{"week":13,"type":"regular","home":{"teamId":8,"score":92.3,"managerId":"sample:sample-7"},"away":{"teamId":2,"score":123.3,"managerId":"sample:sample-1"}},{"week":13,"type":"regular","home":{"teamId":9,"score":72.4,"managerId":"sample:sample-8"},"away":{"teamId":10,"score":101.3,"managerId":"sample:sample-9"}},{"week":14,"type":"regular","home":{"teamId":1,"score":120.9,"managerId":"sample:sample-0"},"away":{"teamId":6,"score":114.7,"managerId":"sample:sample-5"}},{"week":14,"type":"regular","home":{"teamId":7,"score":106.1,"managerId":"sample:sample-6"},"away":{"teamId":5,"score":104.9,"managerId":"sample:sample-4"}},{"week":14,"type":"regular","home":{"teamId":8,"score":107.4,"managerId":"sample:sample-7"},"away":{"teamId":4,"score":109.3,"managerId":"sample:sample-3"}},{"week":14,"type":"regular","home":{"teamId":9,"score":88.5,"managerId":"sample:sample-8"},"away":{"teamId":3,"score":116.7,"managerId":"sample:sample-2"}},{"week":14,"type":"regular","home":{"teamId":10,"score":107.5,"managerId":"sample:sample-9"},"away":{"teamId":2,"score":117.2,"managerId":"sample:sample-1"}},{"week":15,"type":"playoff","home":{"teamId":2,"score":82.6,"managerId":"sample:sample-1"},"away":{"teamId":8,"score":103.9,"managerId":"sample:sample-7"}},{"week":15,"type":"playoff","home":{"teamId":7,"score":108.9,"managerId":"sample:sample-6"},"away":{"teamId":6,"score":120.3,"managerId":"sample:sample-5"}},{"week":16,"type":"playoff","home":{"teamId":8,"score":119.8,"managerId":"sample:sample-7"},"away":{"teamId":6,"score":119.2,"managerId":"sample:sample-5"}},{"week":16,"type":"playoff","home":{"teamId":2,"score":122.1,"managerId":"sample:sample-1"},"away":{"teamId":7,"score":99.3,"managerId":"sample:sample-6"}}]},{"year":2019,"platform":"sample","leagueName":"Sample League","status":"complete","championTeamId":8,"championManagerId":"sample:sample-7","teams":[{"teamId":1,"name":"Gridiron Ghosts","ownerNames":["Alex"],"wins":6,"losses":8,"ties":0,"pf":1354.4,"pa":1423.3,"finalRank":8,"playoffSeed":null,"managerId":"sample:sample-0"},{"teamId":2,"name":"Blitz Krieg","ownerNames":["Brian"],"wins":6,"losses":8,"ties":0,"pf":1497.5,"pa":1512.9,"finalRank":5,"playoffSeed":null,"managerId":"sample:sample-1"},{"teamId":3,"name":"Fourth & Long","ownerNames":["Chris"],"wins":5,"losses":9,"ties":0,"pf":1397.6,"pa":1501.5,"finalRank":10,"playoffSeed":null,"managerId":"sample:sample-2"},{"teamId":4,"name":"Hail Marys","ownerNames":["Dana"],"wins":5,"losses":9,"ties":0,"pf":1408.4,"pa":1476.5,"finalRank":9,"playoffSeed":null,"managerId":"sample:sample-3"},{"teamId":5,"name":"Pocket Aces","ownerNames":["Eli"],"wins":7,"losses":7,"ties":0,"pf":1578.6,"pa":1490.4,"finalRank":2,"playoffSeed":4,"managerId":"sample:sample-4"},{"teamId":6,"name":"Red Zone Rebels","ownerNames":["Frank"],"wins":6,"losses":8,"ties":0,"pf":1363.8,"pa":1447.1,"finalRank":7,"playoffSeed":null,"managerId":"sample:sample-5"},{"teamId":7,"name":"Sack Attack","ownerNames":["Gina"],"wins":6,"losses":8,"ties":0,"pf":1477.5,"pa":1482.4,"finalRank":6,"playoffSeed":null,"managerId":"sample:sample-6"},{"teamId":8,"name":"Tight End Zone","ownerNames":["Hank"],"wins":10,"losses":4,"ties":0,"pf":1473.6,"pa":1442.1,"finalRank":1,"playoffSeed":2,"managerId":"sample:sample-7"},{"teamId":9,"name":"Waiver Wire Warriors","ownerNames":["Ivy"],"wins":11,"losses":3,"ties":0,"pf":1516.8,"pa":1369.7,"finalRank":3,"playoffSeed":1,"managerId":"sample:sample-8"},{"teamId":10,"name":"Punt Gods","ownerNames":["Jake"],"wins":8,"losses":6,"ties":0,"pf":1636.6,"pa":1558.9,"finalRank":4,"playoffSeed":3,"managerId":"sample:sample-9"}],"matchups":[{"week":1,"type":"regular","home":{"teamId":1,"score":72.9,"managerId":"sample:sample-0"},"away":{"teamId":2,"score":91.4,"managerId":"sample:sample-1"}},{"week":1,"type":"regular","home":{"teamId":3,"score":107.7,"managerId":"sample:sample-2"},"away":{"teamId":10,"score":123.5,"managerId":"sample:sample-9"}},{"week":1,"type":"regular","home":{"teamId":4,"score":106.9,"managerId":"sample:sample-3"},"away":{"teamId":9,"score":118.4,"managerId":"sample:sample-8"}},{"week":1,"type":"regular","home":{"teamId":5,"score":133.6,"managerId":"sample:sample-4"},"away":{"teamId":8,"score":74.3,"managerId":"sample:sample-7"}},{"week":1,"type":"regular","home":{"teamId":6,"score":90,"managerId":"sample:sample-5"},"away":{"teamId":7,"score":126.4,"managerId":"sample:sample-6"}},{"week":2,"type":"regular","home":{"teamId":1,"score":109.3,"managerId":"sample:sample-0"},"away":{"teamId":3,"score":116.9,"managerId":"sample:sample-2"}},{"week":2,"type":"regular","home":{"teamId":4,"score":131.6,"managerId":"sample:sample-3"},"away":{"teamId":2,"score":119.7,"managerId":"sample:sample-1"}},{"week":2,"type":"regular","home":{"teamId":5,"score":109.9,"managerId":"sample:sample-4"},"away":{"teamId":10,"score":109.1,"managerId":"sample:sample-9"}},{"week":2,"type":"regular","home":{"teamId":6,"score":93.4,"managerId":"sample:sample-5"},"away":{"teamId":9,"score":97.5,"managerId":"sample:sample-8"}},{"week":2,"type":"regular","home":{"teamId":7,"score":127.7,"managerId":"sample:sample-6"},"away":{"teamId":8,"score":96.1,"managerId":"sample:sample-7"}},{"week":3,"type":"regular","home":{"teamId":1,"score":113.6,"managerId":"sample:sample-0"},"away":{"teamId":4,"score":85.5,"managerId":"sample:sample-3"}},{"week":3,"type":"regular","home":{"teamId":5,"score":83.7,"managerId":"sample:sample-4"},"away":{"teamId":3,"score":110.3,"managerId":"sample:sample-2"}},{"week":3,"type":"regular","home":{"teamId":6,"score":120.4,"managerId":"sample:sample-5"},"away":{"teamId":2,"score":89.3,"managerId":"sample:sample-1"}},{"week":3,"type":"regular","home":{"teamId":7,"score":116.9,"managerId":"sample:sample-6"},"away":{"teamId":10,"score":135.2,"managerId":"sample:sample-9"}},{"week":3,"type":"regular","home":{"teamId":8,"score":95.6,"managerId":"sample:sample-7"},"away":{"teamId":9,"score":124.8,"managerId":"sample:sample-8"}},{"week":4,"type":"regular","home":{"teamId":1,"score":129.4,"managerId":"sample:sample-0"},"away":{"teamId":5,"score":155.3,"managerId":"sample:sample-4"}},{"week":4,"type":"regular","home":{"teamId":6,"score":86.7,"managerId":"sample:sample-5"},"away":{"teamId":4,"score":84.8,"managerId":"sample:sample-3"}},{"week":4,"type":"regular","home":{"teamId":7,"score":103,"managerId":"sample:sample-6"},"away":{"teamId":3,"score":103.7,"managerId":"sample:sample-2"}},{"week":4,"type":"regular","home":{"teamId":8,"score":147.1,"managerId":"sample:sample-7"},"away":{"teamId":2,"score":86.2,"managerId":"sample:sample-1"}},{"week":4,"type":"regular","home":{"teamId":9,"score":137.9,"managerId":"sample:sample-8"},"away":{"teamId":10,"score":105.2,"managerId":"sample:sample-9"}},{"week":5,"type":"regular","home":{"teamId":1,"score":76.1,"managerId":"sample:sample-0"},"away":{"teamId":6,"score":69.9,"managerId":"sample:sample-5"}},{"week":5,"type":"regular","home":{"teamId":7,"score":119.5,"managerId":"sample:sample-6"},"away":{"teamId":5,"score":107.7,"managerId":"sample:sample-4"}},{"week":5,"type":"regular","home":{"teamId":8,"score":99.2,"managerId":"sample:sample-7"},"away":{"teamId":4,"score":91,"managerId":"sample:sample-3"}},{"week":5,"type":"regular","home":{"teamId":9,"score":86.3,"managerId":"sample:sample-8"},"away":{"teamId":3,"score":77.1,"managerId":"sample:sample-2"}},{"week":5,"type":"regular","home":{"teamId":10,"score":128.2,"managerId":"sample:sample-9"},"away":{"teamId":2,"score":114.5,"managerId":"sample:sample-1"}},{"week":6,"type":"regular","home":{"teamId":1,"score":103.1,"managerId":"sample:sample-0"},"away":{"teamId":7,"score":80.2,"managerId":"sample:sample-6"}},{"week":6,"type":"regular","home":{"teamId":8,"score":79.3,"managerId":"sample:sample-7"},"away":{"teamId":6,"score":105.7,"managerId":"sample:sample-5"}},{"week":6,"type":"regular","home":{"teamId":9,"score":87.9,"managerId":"sample:sample-8"},"away":{"teamId":5,"score":122.1,"managerId":"sample:sample-4"}},{"week":6,"type":"regular","home":{"teamId":10,"score":139.6,"managerId":"sample:sample-9"},"away":{"teamId":4,"score":98.9,"managerId":"sample:sample-3"}},{"week":6,"type":"regular","home":{"teamId":2,"score":107.9,"managerId":"sample:sample-1"},"away":{"teamId":3,"score":119.3,"managerId":"sample:sample-2"}},{"week":7,"type":"regular","home":{"teamId":1,"score":80.1,"managerId":"sample:sample-0"},"away":{"teamId":8,"score":120.9,"managerId":"sample:sample-7"}},{"week":7,"type":"regular","home":{"teamId":9,"score":125.4,"managerId":"sample:sample-8"},"away":{"teamId":7,"score":81.6,"managerId":"sample:sample-6"}},{"week":7,"type":"regular","home":{"teamId":10,"score":123.9,"managerId":"sample:sample-9"},"away":{"teamId":6,"score":57,"managerId":"sample:sample-5"}},{"week":7,"type":"regular","home":{"teamId":2,"score":83.2,"managerId":"sample:sample-1"},"away":{"teamId":5,"score":114.3,"managerId":"sample:sample-4"}},{"week":7,"type":"regular","home":{"teamId":3,"score":57.3,"managerId":"sample:sample-2"},"away":{"teamId":4,"score":110,"managerId":"sample:sample-3"}},{"week":8,"type":"regular","home":{"teamId":1,"score":83.2,"managerId":"sample:sample-0"},"away":{"teamId":9,"score":118.6,"managerId":"sample:sample-8"}},{"week":8,"type":"regular","home":{"teamId":10,"score":107,"managerId":"sample:sample-9"},"away":{"teamId":8,"score":109.2,"managerId":"sample:sample-7"}},{"week":8,"type":"regular","home":{"teamId":2,"score":112,"managerId":"sample:sample-1"},"away":{"teamId":7,"score":103.4,"managerId":"sample:sample-6"}},{"week":8,"type":"regular","home":{"teamId":3,"score":91.8,"managerId":"sample:sample-2"},"away":{"teamId":6,"score":120.1,"managerId":"sample:sample-5"}},{"week":8,"type":"regular","home":{"teamId":4,"score":123,"managerId":"sample:sample-3"},"away":{"teamId":5,"score":116.4,"managerId":"sample:sample-4"}},{"week":9,"type":"regular","home":{"teamId":1,"score":129.7,"managerId":"sample:sample-0"},"away":{"teamId":10,"score":79.2,"managerId":"sample:sample-9"}},{"week":9,"type":"regular","home":{"teamId":2,"score":117.2,"managerId":"sample:sample-1"},"away":{"teamId":9,"score":75.8,"managerId":"sample:sample-8"}},{"week":9,"type":"regular","home":{"teamId":3,"score":98.9,"managerId":"sample:sample-2"},"away":{"teamId":8,"score":123.2,"managerId":"sample:sample-7"}},{"week":9,"type":"regular","home":{"teamId":4,"score":89.2,"managerId":"sample:sample-3"},"away":{"teamId":7,"score":109.9,"managerId":"sample:sample-6"}},{"week":9,"type":"regular","home":{"teamId":5,"score":110.1,"managerId":"sample:sample-4"},"away":{"teamId":6,"score":116.2,"managerId":"sample:sample-5"}},{"week":10,"type":"regular","home":{"teamId":1,"score":80.7,"managerId":"sample:sample-0"},"away":{"teamId":2,"score":78.8,"managerId":"sample:sample-1"}},{"week":10,"type":"regular","home":{"teamId":3,"score":97.9,"managerId":"sample:sample-2"},"away":{"teamId":10,"score":121.5,"managerId":"sample:sample-9"}},{"week":10,"type":"regular","home":{"teamId":4,"score":75.6,"managerId":"sample:sample-3"},"away":{"teamId":9,"score":112.4,"managerId":"sample:sample-8"}},{"week":10,"type":"regular","home":{"teamId":5,"score":98.2,"managerId":"sample:sample-4"},"away":{"teamId":8,"score":108.2,"managerId":"sample:sample-7"}},{"week":10,"type":"regular","home":{"teamId":6,"score":91.8,"managerId":"sample:sample-5"},"away":{"teamId":7,"score":121.4,"managerId":"sample:sample-6"}},{"week":11,"type":"regular","home":{"teamId":1,"score":110.4,"managerId":"sample:sample-0"},"away":{"teamId":3,"score":104.4,"managerId":"sample:sample-2"}},{"week":11,"type":"regular","home":{"teamId":4,"score":83.2,"managerId":"sample:sample-3"},"away":{"teamId":2,"score":114.7,"managerId":"sample:sample-1"}},{"week":11,"type":"regular","home":{"teamId":5,"score":133.7,"managerId":"sample:sample-4"},"away":{"teamId":10,"score":134.1,"managerId":"sample:sample-9"}},{"week":11,"type":"regular","home":{"teamId":6,"score":99.3,"managerId":"sample:sample-5"},"away":{"teamId":9,"score":113.7,"managerId":"sample:sample-8"}},{"week":11,"type":"regular","home":{"teamId":7,"score":74.8,"managerId":"sample:sample-6"},"away":{"teamId":8,"score":81.7,"managerId":"sample:sample-7"}},{"week":12,"type":"regular","home":{"teamId":1,"score":88.7,"managerId":"sample:sample-0"},"away":{"teamId":4,"score":122.8,"managerId":"sample:sample-3"}},{"week":12,"type":"regular","home":{"teamId":5,"score":108.3,"managerId":"sample:sample-4"},"away":{"teamId":3,"score":85.5,"managerId":"sample:sample-2"}},{"week":12,"type":"regular","home":{"teamId":6,"score":115,"managerId":"sample:sample-5"},"away":{"teamId":2,"score":128.1,"managerId":"sample:sample-1"}},{"week":12,"type":"regular","home":{"teamId":7,"score":90,"managerId":"sample:sample-6"},"away":{"teamId":10,"score":121.1,"managerId":"sample:sample-9"}},{"week":12,"type":"regular","home":{"teamId":8,"score":112.7,"managerId":"sample:sample-7"},"away":{"teamId":9,"score":101.9,"managerId":"sample:sample-8"}},{"week":13,"type":"regular","home":{"teamId":1,"score":72.7,"managerId":"sample:sample-0"},"away":{"teamId":5,"score":93.4,"managerId":"sample:sample-4"}},{"week":13,"type":"regular","home":{"teamId":6,"score":92.3,"managerId":"sample:sample-5"},"away":{"teamId":4,"score":100.2,"managerId":"sample:sample-3"}},{"week":13,"type":"regular","home":{"teamId":7,"score":85.7,"managerId":"sample:sample-6"},"away":{"teamId":3,"score":133.5,"managerId":"sample:sample-2"}},{"week":13,"type":"regular","home":{"teamId":8,"score":118.5,"managerId":"sample:sample-7"},"away":{"teamId":2,"score":106.5,"managerId":"sample:sample-1"}},{"week":13,"type":"regular","home":{"teamId":9,"score":107.6,"managerId":"sample:sample-8"},"away":{"teamId":10,"score":106.5,"managerId":"sample:sample-9"}},{"week":14,"type":"regular","home":{"teamId":1,"score":104.5,"managerId":"sample:sample-0"},"away":{"teamId":6,"score":106,"managerId":"sample:sample-5"}},{"week":14,"type":"regular","home":{"teamId":7,"score":137,"managerId":"sample:sample-6"},"away":{"teamId":5,"score":91.9,"managerId":"sample:sample-4"}},{"week":14,"type":"regular","home":{"teamId":8,"score":107.6,"managerId":"sample:sample-7"},"away":{"teamId":4,"score":105.7,"managerId":"sample:sample-3"}},{"week":14,"type":"regular","home":{"teamId":9,"score":108.6,"managerId":"sample:sample-8"},"away":{"teamId":3,"score":93.3,"managerId":"sample:sample-2"}},{"week":14,"type":"regular","home":{"teamId":10,"score":102.5,"managerId":"sample:sample-9"},"away":{"teamId":2,"score":148,"managerId":"sample:sample-1"}},{"week":15,"type":"playoff","home":{"teamId":9,"score":91,"managerId":"sample:sample-8"},"away":{"teamId":5,"score":103.8,"managerId":"sample:sample-4"}},{"week":15,"type":"playoff","home":{"teamId":8,"score":120.6,"managerId":"sample:sample-7"},"away":{"teamId":10,"score":58,"managerId":"sample:sample-9"}},{"week":16,"type":"playoff","home":{"teamId":5,"score":110.9,"managerId":"sample:sample-4"},"away":{"teamId":8,"score":144.9,"managerId":"sample:sample-7"}},{"week":16,"type":"playoff","home":{"teamId":9,"score":97,"managerId":"sample:sample-8"},"away":{"teamId":10,"score":78.9,"managerId":"sample:sample-9"}}]},{"year":2020,"platform":"sample","leagueName":"Sample League","status":"complete","championTeamId":5,"championManagerId":"sample:sample-4","teams":[{"teamId":1,"name":"Gridiron Ghosts","ownerNames":["Alex"],"wins":5,"losses":9,"ties":0,"pf":1407,"pa":1483.6,"finalRank":9,"playoffSeed":null,"managerId":"sample:sample-0"},{"teamId":2,"name":"Blitz Krieg","ownerNames":["Brian"],"wins":8,"losses":6,"ties":0,"pf":1381.9,"pa":1363.7,"finalRank":5,"playoffSeed":null,"managerId":"sample:sample-1"},{"teamId":3,"name":"Fourth & Long","ownerNames":["Chris"],"wins":7,"losses":7,"ties":0,"pf":1514.9,"pa":1453.7,"finalRank":6,"playoffSeed":null,"managerId":"sample:sample-2"},{"teamId":4,"name":"Hail Marys","ownerNames":["Dana"],"wins":6,"losses":8,"ties":0,"pf":1451,"pa":1386.2,"finalRank":7,"playoffSeed":null,"managerId":"sample:sample-3"},{"teamId":5,"name":"Pocket Aces","ownerNames":["Eli"],"wins":9,"losses":5,"ties":0,"pf":1416.4,"pa":1462.8,"finalRank":1,"playoffSeed":3,"managerId":"sample:sample-4"},{"teamId":6,"name":"Red Zone Rebels","ownerNames":["Frank"],"wins":5,"losses":9,"ties":0,"pf":1450.7,"pa":1539.4,"finalRank":8,"playoffSeed":null,"managerId":"sample:sample-5"},{"teamId":7,"name":"Sack Attack","ownerNames":["Gina"],"wins":4,"losses":10,"ties":0,"pf":1422.7,"pa":1597.6,"finalRank":10,"playoffSeed":null,"managerId":"sample:sample-6"},{"teamId":8,"name":"Tight End Zone","ownerNames":["Hank"],"wins":9,"losses":5,"ties":0,"pf":1503.6,"pa":1394.9,"finalRank":3,"playoffSeed":2,"managerId":"sample:sample-7"},{"teamId":9,"name":"Waiver Wire Warriors","ownerNames":["Ivy"],"wins":9,"losses":5,"ties":0,"pf":1514.5,"pa":1425.4,"finalRank":4,"playoffSeed":1,"managerId":"sample:sample-8"},{"teamId":10,"name":"Punt Gods","ownerNames":["Jake"],"wins":8,"losses":6,"ties":0,"pf":1404.1,"pa":1359.5,"finalRank":2,"playoffSeed":4,"managerId":"sample:sample-9"}],"matchups":[{"week":1,"type":"regular","home":{"teamId":1,"score":87,"managerId":"sample:sample-0"},"away":{"teamId":2,"score":75.1,"managerId":"sample:sample-1"}},{"week":1,"type":"regular","home":{"teamId":3,"score":119.3,"managerId":"sample:sample-2"},"away":{"teamId":10,"score":72.2,"managerId":"sample:sample-9"}},{"week":1,"type":"regular","home":{"teamId":4,"score":88.8,"managerId":"sample:sample-3"},"away":{"teamId":9,"score":82.5,"managerId":"sample:sample-8"}},{"week":1,"type":"regular","home":{"teamId":5,"score":117.6,"managerId":"sample:sample-4"},"away":{"teamId":8,"score":113.1,"managerId":"sample:sample-7"}},{"week":1,"type":"regular","home":{"teamId":6,"score":138.7,"managerId":"sample:sample-5"},"away":{"teamId":7,"score":102.2,"managerId":"sample:sample-6"}},{"week":2,"type":"regular","home":{"teamId":1,"score":99.7,"managerId":"sample:sample-0"},"away":{"teamId":3,"score":118.6,"managerId":"sample:sample-2"}},{"week":2,"type":"regular","home":{"teamId":4,"score":76.6,"managerId":"sample:sample-3"},"away":{"teamId":2,"score":95.8,"managerId":"sample:sample-1"}},{"week":2,"type":"regular","home":{"teamId":5,"score":68.7,"managerId":"sample:sample-4"},"away":{"teamId":10,"score":128.9,"managerId":"sample:sample-9"}},{"week":2,"type":"regular","home":{"teamId":6,"score":84.5,"managerId":"sample:sample-5"},"away":{"teamId":9,"score":92.9,"managerId":"sample:sample-8"}},{"week":2,"type":"regular","home":{"teamId":7,"score":87.4,"managerId":"sample:sample-6"},"away":{"teamId":8,"score":138.6,"managerId":"sample:sample-7"}},{"week":3,"type":"regular","home":{"teamId":1,"score":105.4,"managerId":"sample:sample-0"},"away":{"teamId":4,"score":135.8,"managerId":"sample:sample-3"}},{"week":3,"type":"regular","home":{"teamId":5,"score":71.1,"managerId":"sample:sample-4"},"away":{"teamId":3,"score":98.2,"managerId":"sample:sample-2"}},{"week":3,"type":"regular","home":{"teamId":6,"score":97.5,"managerId":"sample:sample-5"},"away":{"teamId":2,"score":115.7,"managerId":"sample:sample-1"}},{"week":3,"type":"regular","home":{"teamId":7,"score":103,"managerId":"sample:sample-6"},"away":{"teamId":10,"score":104.5,"managerId":"sample:sample-9"}},{"week":3,"type":"regular","home":{"teamId":8,"score":132.1,"managerId":"sample:sample-7"},"away":{"teamId":9,"score":96.8,"managerId":"sample:sample-8"}},{"week":4,"type":"regular","home":{"teamId":1,"score":102.2,"managerId":"sample:sample-0"},"away":{"teamId":5,"score":105.1,"managerId":"sample:sample-4"}},{"week":4,"type":"regular","home":{"teamId":6,"score":95,"managerId":"sample:sample-5"},"away":{"teamId":4,"score":120.4,"managerId":"sample:sample-3"}},{"week":4,"type":"regular","home":{"teamId":7,"score":99.5,"managerId":"sample:sample-6"},"away":{"teamId":3,"score":144.3,"managerId":"sample:sample-2"}},{"week":4,"type":"regular","home":{"teamId":8,"score":106.3,"managerId":"sample:sample-7"},"away":{"teamId":2,"score":94.5,"managerId":"sample:sample-1"}},{"week":4,"type":"regular","home":{"teamId":9,"score":128.7,"managerId":"sample:sample-8"},"away":{"teamId":10,"score":74.6,"managerId":"sample:sample-9"}},{"week":5,"type":"regular","home":{"teamId":1,"score":92.3,"managerId":"sample:sample-0"},"away":{"teamId":6,"score":57.9,"managerId":"sample:sample-5"}},{"week":5,"type":"regular","home":{"teamId":7,"score":89.3,"managerId":"sample:sample-6"},"away":{"teamId":5,"score":102.2,"managerId":"sample:sample-4"}},{"week":5,"type":"regular","home":{"teamId":8,"score":98.5,"managerId":"sample:sample-7"},"away":{"teamId":4,"score":94.6,"managerId":"sample:sample-3"}},{"week":5,"type":"regular","home":{"teamId":9,"score":120.5,"managerId":"sample:sample-8"},"away":{"teamId":3,"score":120.4,"managerId":"sample:sample-2"}},{"week":5,"type":"regular","home":{"teamId":10,"score":83,"managerId":"sample:sample-9"},"away":{"teamId":2,"score":85.5,"managerId":"sample:sample-1"}},{"week":6,"type":"regular","home":{"teamId":1,"score":112.7,"managerId":"sample:sample-0"},"away":{"teamId":7,"score":104.7,"managerId":"sample:sample-6"}},{"week":6,"type":"regular","home":{"teamId":8,"score":119,"managerId":"sample:sample-7"},"away":{"teamId":6,"score":127.3,"managerId":"sample:sample-5"}},{"week":6,"type":"regular","home":{"teamId":9,"score":106.4,"managerId":"sample:sample-8"},"away":{"teamId":5,"score":134.9,"managerId":"sample:sample-4"}},{"week":6,"type":"regular","home":{"teamId":10,"score":110.1,"managerId":"sample:sample-9"},"away":{"teamId":4,"score":133.4,"managerId":"sample:sample-3"}},{"week":6,"type":"regular","home":{"teamId":2,"score":125.6,"managerId":"sample:sample-1"},"away":{"teamId":3,"score":100.8,"managerId":"sample:sample-2"}},{"week":7,"type":"regular","home":{"teamId":1,"score":95.3,"managerId":"sample:sample-0"},"away":{"teamId":8,"score":109.3,"managerId":"sample:sample-7"}},{"week":7,"type":"regular","home":{"teamId":9,"score":134,"managerId":"sample:sample-8"},"away":{"teamId":7,"score":97.1,"managerId":"sample:sample-6"}},{"week":7,"type":"regular","home":{"teamId":10,"score":97.8,"managerId":"sample:sample-9"},"away":{"teamId":6,"score":94.2,"managerId":"sample:sample-5"}},{"week":7,"type":"regular","home":{"teamId":2,"score":104.6,"managerId":"sample:sample-1"},"away":{"teamId":5,"score":106.7,"managerId":"sample:sample-4"}},{"week":7,"type":"regular","home":{"teamId":3,"score":56.1,"managerId":"sample:sample-2"},"away":{"teamId":4,"score":122.8,"managerId":"sample:sample-3"}},{"week":8,"type":"regular","home":{"teamId":1,"score":94.8,"managerId":"sample:sample-0"},"away":{"teamId":9,"score":115.5,"managerId":"sample:sample-8"}},{"week":8,"type":"regular","home":{"teamId":10,"score":135.5,"managerId":"sample:sample-9"},"away":{"teamId":8,"score":98.6,"managerId":"sample:sample-7"}},{"week":8,"type":"regular","home":{"teamId":2,"score":108.2,"managerId":"sample:sample-1"},"away":{"teamId":7,"score":117.4,"managerId":"sample:sample-6"}},{"week":8,"type":"regular","home":{"teamId":3,"score":107.1,"managerId":"sample:sample-2"},"away":{"teamId":6,"score":116,"managerId":"sample:sample-5"}},{"week":8,"type":"regular","home":{"teamId":4,"score":97.2,"managerId":"sample:sample-3"},"away":{"teamId":5,"score":104,"managerId":"sample:sample-4"}},{"week":9,"type":"regular","home":{"teamId":1,"score":86.4,"managerId":"sample:sample-0"},"away":{"teamId":10,"score":90.7,"managerId":"sample:sample-9"}},{"week":9,"type":"regular","home":{"teamId":2,"score":63.5,"managerId":"sample:sample-1"},"away":{"teamId":9,"score":102.3,"managerId":"sample:sample-8"}},{"week":9,"type":"regular","home":{"teamId":3,"score":82.4,"managerId":"sample:sample-2"},"away":{"teamId":8,"score":114.3,"managerId":"sample:sample-7"}},{"week":9,"type":"regular","home":{"teamId":4,"score":114.8,"managerId":"sample:sample-3"},"away":{"teamId":7,"score":113.7,"managerId":"sample:sample-6"}},{"week":9,"type":"regular","home":{"teamId":5,"score":99.4,"managerId":"sample:sample-4"},"away":{"teamId":6,"score":116.6,"managerId":"sample:sample-5"}},{"week":10,"type":"regular","home":{"teamId":1,"score":113,"managerId":"sample:sample-0"},"away":{"teamId":2,"score":118.6,"managerId":"sample:sample-1"}},{"week":10,"type":"regular","home":{"teamId":3,"score":82.8,"managerId":"sample:sample-2"},"away":{"teamId":10,"score":94.1,"managerId":"sample:sample-9"}},{"week":10,"type":"regular","home":{"teamId":4,"score":96.7,"managerId":"sample:sample-3"},"away":{"teamId":9,"score":104.8,"managerId":"sample:sample-8"}},{"week":10,"type":"regular","home":{"teamId":5,"score":97.9,"managerId":"sample:sample-4"},"away":{"teamId":8,"score":85.5,"managerId":"sample:sample-7"}},{"week":10,"type":"regular","home":{"teamId":6,"score":96.3,"managerId":"sample:sample-5"},"away":{"teamId":7,"score":141.8,"managerId":"sample:sample-6"}},{"week":11,"type":"regular","home":{"teamId":1,"score":72.8,"managerId":"sample:sample-0"},"away":{"teamId":3,"score":125.8,"managerId":"sample:sample-2"}},{"week":11,"type":"regular","home":{"teamId":4,"score":87.6,"managerId":"sample:sample-3"},"away":{"teamId":2,"score":90.7,"managerId":"sample:sample-1"}},{"week":11,"type":"regular","home":{"teamId":5,"score":107.1,"managerId":"sample:sample-4"},"away":{"teamId":10,"score":104.1,"managerId":"sample:sample-9"}},{"week":11,"type":"regular","home":{"teamId":6,"score":124.1,"managerId":"sample:sample-5"},"away":{"teamId":9,"score":137,"managerId":"sample:sample-8"}},{"week":11,"type":"regular","home":{"teamId":7,"score":82.4,"managerId":"sample:sample-6"},"away":{"teamId":8,"score":93.4,"managerId":"sample:sample-7"}},{"week":12,"type":"regular","home":{"teamId":1,"score":124.2,"managerId":"sample:sample-0"},"away":{"teamId":4,"score":106,"managerId":"sample:sample-3"}},{"week":12,"type":"regular","home":{"teamId":5,"score":108.6,"managerId":"sample:sample-4"},"away":{"teamId":3,"score":123.1,"managerId":"sample:sample-2"}},{"week":12,"type":"regular","home":{"teamId":6,"score":92.2,"managerId":"sample:sample-5"},"away":{"teamId":2,"score":109.1,"managerId":"sample:sample-1"}},{"week":12,"type":"regular","home":{"teamId":7,"score":81.9,"managerId":"sample:sample-6"},"away":{"teamId":10,"score":129.3,"managerId":"sample:sample-9"}},{"week":12,"type":"regular","home":{"teamId":8,"score":88.3,"managerId":"sample:sample-7"},"away":{"teamId":9,"score":70.8,"managerId":"sample:sample-8"}},{"week":13,"type":"regular","home":{"teamId":1,"score":99.7,"managerId":"sample:sample-0"},"away":{"teamId":5,"score":113.1,"managerId":"sample:sample-4"}},{"week":13,"type":"regular","home":{"teamId":6,"score":103,"managerId":"sample:sample-5"},"away":{"teamId":4,"score":83.2,"managerId":"sample:sample-3"}},{"week":13,"type":"regular","home":{"teamId":7,"score":108.4,"managerId":"sample:sample-6"},"away":{"teamId":3,"score":100.6,"managerId":"sample:sample-2"}},{"week":13,"type":"regular","home":{"teamId":8,"score":104.2,"managerId":"sample:sample-7"},"away":{"teamId":2,"score":119.3,"managerId":"sample:sample-1"}},{"week":13,"type":"regular","home":{"teamId":9,"score":94.2,"managerId":"sample:sample-8"},"away":{"teamId":10,"score":90.2,"managerId":"sample:sample-9"}},{"week":14,"type":"regular","home":{"teamId":1,"score":121.5,"managerId":"sample:sample-0"},"away":{"teamId":6,"score":107.4,"managerId":"sample:sample-5"}},{"week":14,"type":"regular","home":{"teamId":7,"score":93.9,"managerId":"sample:sample-6"},"away":{"teamId":5,"score":80,"managerId":"sample:sample-4"}},{"week":14,"type":"regular","home":{"teamId":8,"score":102.4,"managerId":"sample:sample-7"},"away":{"teamId":4,"score":93.1,"managerId":"sample:sample-3"}},{"week":14,"type":"regular","home":{"teamId":9,"score":128.1,"managerId":"sample:sample-8"},"away":{"teamId":3,"score":135.4,"managerId":"sample:sample-2"}},{"week":14,"type":"regular","home":{"teamId":10,"score":89.1,"managerId":"sample:sample-9"},"away":{"teamId":2,"score":75.7,"managerId":"sample:sample-1"}},{"week":15,"type":"playoff","home":{"teamId":9,"score":106.2,"managerId":"sample:sample-8"},"away":{"teamId":10,"score":125,"managerId":"sample:sample-9"}},{"week":15,"type":"playoff","home":{"teamId":8,"score":104.7,"managerId":"sample:sample-7"},"away":{"teamId":5,"score":140.8,"managerId":"sample:sample-4"}},{"week":16,"type":"playoff","home":{"teamId":10,"score":106.7,"managerId":"sample:sample-9"},"away":{"teamId":5,"score":128.7,"managerId":"sample:sample-4"}},{"week":16,"type":"playoff","home":{"teamId":9,"score":77.2,"managerId":"sample:sample-8"},"away":{"teamId":8,"score":119.1,"managerId":"sample:sample-7"}}]},{"year":2021,"platform":"sample","leagueName":"Sample League","status":"complete","championTeamId":8,"championManagerId":"sample:sample-7","teams":[{"teamId":1,"name":"Gridiron Ghosts","ownerNames":["Alex"],"wins":4,"losses":10,"ties":0,"pf":1386.4,"pa":1610.9,"finalRank":10,"playoffSeed":null,"managerId":"sample:sample-0"},{"teamId":2,"name":"Blitz Krieg","ownerNames":["Brian"],"wins":5,"losses":9,"ties":0,"pf":1546.2,"pa":1561.2,"finalRank":9,"playoffSeed":null,"managerId":"sample:sample-1"},{"teamId":3,"name":"Fourth & Long","ownerNames":["Chris"],"wins":8,"losses":6,"ties":0,"pf":1442.6,"pa":1378,"finalRank":5,"playoffSeed":null,"managerId":"sample:sample-2"},{"teamId":4,"name":"Hail Marys","ownerNames":["Dana"],"wins":6,"losses":8,"ties":0,"pf":1411.7,"pa":1513.1,"finalRank":8,"playoffSeed":null,"managerId":"sample:sample-3"},{"teamId":5,"name":"Pocket Aces","ownerNames":["Eli"],"wins":8,"losses":6,"ties":0,"pf":1489.5,"pa":1425.9,"finalRank":4,"playoffSeed":4,"managerId":"sample:sample-4"},{"teamId":6,"name":"Red Zone Rebels","ownerNames":["Frank"],"wins":9,"losses":5,"ties":0,"pf":1451.5,"pa":1401.8,"finalRank":2,"playoffSeed":2,"managerId":"sample:sample-5"},{"teamId":7,"name":"Sack Attack","ownerNames":["Gina"],"wins":6,"losses":8,"ties":0,"pf":1427.3,"pa":1559.5,"finalRank":7,"playoffSeed":null,"managerId":"sample:sample-6"},{"teamId":8,"name":"Tight End Zone","ownerNames":["Hank"],"wins":9,"losses":5,"ties":0,"pf":1570.6,"pa":1444.6,"finalRank":1,"playoffSeed":1,"managerId":"sample:sample-7"},{"teamId":9,"name":"Waiver Wire Warriors","ownerNames":["Ivy"],"wins":7,"losses":7,"ties":0,"pf":1442.7,"pa":1405.6,"finalRank":6,"playoffSeed":null,"managerId":"sample:sample-8"},{"teamId":10,"name":"Punt Gods","ownerNames":["Jake"],"wins":8,"losses":6,"ties":0,"pf":1615,"pa":1482.9,"finalRank":3,"playoffSeed":3,"managerId":"sample:sample-9"}],"matchups":[{"week":1,"type":"regular","home":{"teamId":1,"score":110.6,"managerId":"sample:sample-0"},"away":{"teamId":2,"score":133.7,"managerId":"sample:sample-1"}},{"week":1,"type":"regular","home":{"teamId":3,"score":84.2,"managerId":"sample:sample-2"},"away":{"teamId":10,"score":105.2,"managerId":"sample:sample-9"}},{"week":1,"type":"regular","home":{"teamId":4,"score":80,"managerId":"sample:sample-3"},"away":{"teamId":9,"score":102.6,"managerId":"sample:sample-8"}},{"week":1,"type":"regular","home":{"teamId":5,"score":88.8,"managerId":"sample:sample-4"},"away":{"teamId":8,"score":115.4,"managerId":"sample:sample-7"}},{"week":1,"type":"regular","home":{"teamId":6,"score":127.7,"managerId":"sample:sample-5"},"away":{"teamId":7,"score":93.1,"managerId":"sample:sample-6"}},{"week":2,"type":"regular","home":{"teamId":1,"score":103,"managerId":"sample:sample-0"},"away":{"teamId":3,"score":95.4,"managerId":"sample:sample-2"}},{"week":2,"type":"regular","home":{"teamId":4,"score":126.1,"managerId":"sample:sample-3"},"away":{"teamId":2,"score":124.4,"managerId":"sample:sample-1"}},{"week":2,"type":"regular","home":{"teamId":5,"score":133.5,"managerId":"sample:sample-4"},"away":{"teamId":10,"score":108.9,"managerId":"sample:sample-9"}},{"week":2,"type":"regular","home":{"teamId":6,"score":101.4,"managerId":"sample:sample-5"},"away":{"teamId":9,"score":86.2,"managerId":"sample:sample-8"}},{"week":2,"type":"regular","home":{"teamId":7,"score":100.6,"managerId":"sample:sample-6"},"away":{"teamId":8,"score":146.8,"managerId":"sample:sample-7"}},{"week":3,"type":"regular","home":{"teamId":1,"score":89.8,"managerId":"sample:sample-0"},"away":{"teamId":4,"score":114.6,"managerId":"sample:sample-3"}},{"week":3,"type":"regular","home":{"teamId":5,"score":107.9,"managerId":"sample:sample-4"},"away":{"teamId":3,"score":116,"managerId":"sample:sample-2"}},{"week":3,"type":"regular","home":{"teamId":6,"score":96.6,"managerId":"sample:sample-5"},"away":{"teamId":2,"score":82.9,"managerId":"sample:sample-1"}},{"week":3,"type":"regular","home":{"teamId":7,"score":77.2,"managerId":"sample:sample-6"},"away":{"teamId":10,"score":139.2,"managerId":"sample:sample-9"}},{"week":3,"type":"regular","home":{"teamId":8,"score":143.4,"managerId":"sample:sample-7"},"away":{"teamId":9,"score":125.1,"managerId":"sample:sample-8"}},{"week":4,"type":"regular","home":{"teamId":1,"score":100,"managerId":"sample:sample-0"},"away":{"teamId":5,"score":123.4,"managerId":"sample:sample-4"}},{"week":4,"type":"regular","home":{"teamId":6,"score":116.6,"managerId":"sample:sample-5"},"away":{"teamId":4,"score":91.1,"managerId":"sample:sample-3"}},{"week":4,"type":"regular","home":{"teamId":7,"score":93.9,"managerId":"sample:sample-6"},"away":{"teamId":3,"score":117.5,"managerId":"sample:sample-2"}},{"week":4,"type":"regular","home":{"teamId":8,"score":99.9,"managerId":"sample:sample-7"},"away":{"teamId":2,"score":103.8,"managerId":"sample:sample-1"}},{"week":4,"type":"regular","home":{"teamId":9,"score":109.2,"managerId":"sample:sample-8"},"away":{"teamId":10,"score":126.9,"managerId":"sample:sample-9"}},{"week":5,"type":"regular","home":{"teamId":1,"score":120.1,"managerId":"sample:sample-0"},"away":{"teamId":6,"score":98,"managerId":"sample:sample-5"}},{"week":5,"type":"regular","home":{"teamId":7,"score":76.8,"managerId":"sample:sample-6"},"away":{"teamId":5,"score":127.3,"managerId":"sample:sample-4"}},{"week":5,"type":"regular","home":{"teamId":8,"score":101.6,"managerId":"sample:sample-7"},"away":{"teamId":4,"score":85.2,"managerId":"sample:sample-3"}},{"week":5,"type":"regular","home":{"teamId":9,"score":122.3,"managerId":"sample:sample-8"},"away":{"teamId":3,"score":95.2,"managerId":"sample:sample-2"}},{"week":5,"type":"regular","home":{"teamId":10,"score":134.5,"managerId":"sample:sample-9"},"away":{"teamId":2,"score":110.9,"managerId":"sample:sample-1"}},{"week":6,"type":"regular","home":{"teamId":1,"score":116.3,"managerId":"sample:sample-0"},"away":{"teamId":7,"score":98.5,"managerId":"sample:sample-6"}},{"week":6,"type":"regular","home":{"teamId":8,"score":101.1,"managerId":"sample:sample-7"},"away":{"teamId":6,"score":72.8,"managerId":"sample:sample-5"}},{"week":6,"type":"regular","home":{"teamId":9,"score":92.2,"managerId":"sample:sample-8"},"away":{"teamId":5,"score":104.1,"managerId":"sample:sample-4"}},{"week":6,"type":"regular","home":{"teamId":10,"score":89.9,"managerId":"sample:sample-9"},"away":{"teamId":4,"score":102.3,"managerId":"sample:sample-3"}},{"week":6,"type":"regular","home":{"teamId":2,"score":101.6,"managerId":"sample:sample-1"},"away":{"teamId":3,"score":114.8,"managerId":"sample:sample-2"}},{"week":7,"type":"regular","home":{"teamId":1,"score":112.3,"managerId":"sample:sample-0"},"away":{"teamId":8,"score":110.3,"managerId":"sample:sample-7"}},{"week":7,"type":"regular","home":{"teamId":9,"score":88.8,"managerId":"sample:sample-8"},"away":{"teamId":7,"score":77.2,"managerId":"sample:sample-6"}},{"week":7,"type":"regular","home":{"teamId":10,"score":119.6,"managerId":"sample:sample-9"},"away":{"teamId":6,"score":101.4,"managerId":"sample:sample-5"}},{"week":7,"type":"regular","home":{"teamId":2,"score":99.2,"managerId":"sample:sample-1"},"away":{"teamId":5,"score":115.5,"managerId":"sample:sample-4"}},{"week":7,"type":"regular","home":{"teamId":3,"score":114.4,"managerId":"sample:sample-2"},"away":{"teamId":4,"score":87.3,"managerId":"sample:sample-3"}},{"week":8,"type":"regular","home":{"teamId":1,"score":96.3,"managerId":"sample:sample-0"},"away":{"teamId":9,"score":121.6,"managerId":"sample:sample-8"}},{"week":8,"type":"regular","home":{"teamId":10,"score":117.6,"managerId":"sample:sample-9"},"away":{"teamId":8,"score":130.1,"managerId":"sample:sample-7"}},{"week":8,"type":"regular","home":{"teamId":2,"score":99,"managerId":"sample:sample-1"},"away":{"teamId":7,"score":112.1,"managerId":"sample:sample-6"}},{"week":8,"type":"regular","home":{"teamId":3,"score":98.2,"managerId":"sample:sample-2"},"away":{"teamId":6,"score":104.9,"managerId":"sample:sample-5"}},{"week":8,"type":"regular","home":{"teamId":4,"score":105.4,"managerId":"sample:sample-3"},"away":{"teamId":5,"score":93.2,"managerId":"sample:sample-4"}},{"week":9,"type":"regular","home":{"teamId":1,"score":95,"managerId":"sample:sample-0"},"away":{"teamId":10,"score":120,"managerId":"sample:sample-9"}},{"week":9,"type":"regular","home":{"teamId":2,"score":102.6,"managerId":"sample:sample-1"},"away":{"teamId":9,"score":100.9,"managerId":"sample:sample-8"}},{"week":9,"type":"regular","home":{"teamId":3,"score":78.4,"managerId":"sample:sample-2"},"away":{"teamId":8,"score":92.1,"managerId":"sample:sample-7"}},{"week":9,"type":"regular","home":{"teamId":4,"score":94.4,"managerId":"sample:sample-3"},"away":{"teamId":7,"score":144.4,"managerId":"sample:sample-6"}},{"week":9,"type":"regular","home":{"teamId":5,"score":109.1,"managerId":"sample:sample-4"},"away":{"teamId":6,"score":85.8,"managerId":"sample:sample-5"}},{"week":10,"type":"regular","home":{"teamId":1,"score":92.6,"managerId":"sample:sample-0"},"away":{"teamId":2,"score":141.2,"managerId":"sample:sample-1"}},{"week":10,"type":"regular","home":{"teamId":3,"score":89.2,"managerId":"sample:sample-2"},"away":{"teamId":10,"score":123.4,"managerId":"sample:sample-9"}},{"week":10,"type":"regular","home":{"teamId":4,"score":95.4,"managerId":"sample:sample-3"},"away":{"teamId":9,"score":111.3,"managerId":"sample:sample-8"}},{"week":10,"type":"regular","home":{"teamId":5,"score":107,"managerId":"sample:sample-4"},"away":{"teamId":8,"score":99.1,"managerId":"sample:sample-7"}},{"week":10,"type":"regular","home":{"teamId":6,"score":97.6,"managerId":"sample:sample-5"},"away":{"teamId":7,"score":103,"managerId":"sample:sample-6"}},{"week":11,"type":"regular","home":{"teamId":1,"score":104.3,"managerId":"sample:sample-0"},"away":{"teamId":3,"score":133.1,"managerId":"sample:sample-2"}},{"week":11,"type":"regular","home":{"teamId":4,"score":105.7,"managerId":"sample:sample-3"},"away":{"teamId":2,"score":91.7,"managerId":"sample:sample-1"}},{"week":11,"type":"regular","home":{"teamId":5,"score":107.4,"managerId":"sample:sample-4"},"away":{"teamId":10,"score":138.2,"managerId":"sample:sample-9"}},{"week":11,"type":"regular","home":{"teamId":6,"score":102.7,"managerId":"sample:sample-5"},"away":{"teamId":9,"score":72.7,"managerId":"sample:sample-8"}},{"week":11,"type":"regular","home":{"teamId":7,"score":137.1,"managerId":"sample:sample-6"},"away":{"teamId":8,"score":97.6,"managerId":"sample:sample-7"}},{"week":12,"type":"regular","home":{"teamId":1,"score":93.8,"managerId":"sample:sample-0"},"away":{"teamId":4,"score":118.5,"managerId":"sample:sample-3"}},{"week":12,"type":"regular","home":{"teamId":5,"score":65.6,"managerId":"sample:sample-4"},"away":{"teamId":3,"score":102.1,"managerId":"sample:sample-2"}},{"week":12,"type":"regular","home":{"teamId":6,"score":128.3,"managerId":"sample:sample-5"},"away":{"teamId":2,"score":122.3,"managerId":"sample:sample-1"}},{"week":12,"type":"regular","home":{"teamId":7,"score":111.2,"managerId":"sample:sample-6"},"away":{"teamId":10,"score":103.1,"managerId":"sample:sample-9"}},{"week":12,"type":"regular","home":{"teamId":8,"score":92.4,"managerId":"sample:sample-7"},"away":{"teamId":9,"score":122.3,"managerId":"sample:sample-8"}},{"week":13,"type":"regular","home":{"teamId":1,"score":67.9,"managerId":"sample:sample-0"},"away":{"teamId":5,"score":106.5,"managerId":"sample:sample-4"}},{"week":13,"type":"regular","home":{"teamId":6,"score":121.6,"managerId":"sample:sample-5"},"away":{"teamId":4,"score":118,"managerId":"sample:sample-3"}},{"week":13,"type":"regular","home":{"teamId":7,"score":83.3,"managerId":"sample:sample-6"},"away":{"teamId":3,"score":104,"managerId":"sample:sample-2"}},{"week":13,"type":"regular","home":{"teamId":8,"score":123,"managerId":"sample:sample-7"},"away":{"teamId":2,"score":105.9,"managerId":"sample:sample-1"}},{"week":13,"type":"regular","home":{"teamId":9,"score":104.3,"managerId":"sample:sample-8"},"away":{"teamId":10,"score":87.9,"managerId":"sample:sample-9"}},{"week":14,"type":"regular","home":{"teamId":1,"score":84.4,"managerId":"sample:sample-0"},"away":{"teamId":6,"score":96.1,"managerId":"sample:sample-5"}},{"week":14,"type":"regular","home":{"teamId":7,"score":118.9,"managerId":"sample:sample-6"},"away":{"teamId":5,"score":100.2,"managerId":"sample:sample-4"}},{"week":14,"type":"regular","home":{"teamId":8,"score":117.8,"managerId":"sample:sample-7"},"away":{"teamId":4,"score":87.7,"managerId":"sample:sample-3"}},{"week":14,"type":"regular","home":{"teamId":9,"score":83.2,"managerId":"sample:sample-8"},"away":{"teamId":3,"score":100.1,"managerId":"sample:sample-2"}},{"week":14,"type":"regular","home":{"teamId":10,"score":100.6,"managerId":"sample:sample-9"},"away":{"teamId":2,"score":127,"managerId":"sample:sample-1"}},{"week":15,"type":"playoff","home":{"teamId":8,"score":129.3,"managerId":"sample:sample-7"},"away":{"teamId":5,"score":111.7,"managerId":"sample:sample-4"}},{"week":15,"type":"playoff","home":{"teamId":6,"score":136.4,"managerId":"sample:sample-5"},"away":{"teamId":10,"score":97.7,"managerId":"sample:sample-9"}},{"week":16,"type":"playoff","home":{"teamId":8,"score":118.6,"managerId":"sample:sample-7"},"away":{"teamId":6,"score":95,"managerId":"sample:sample-5"}},{"week":16,"type":"playoff","home":{"teamId":5,"score":98.2,"managerId":"sample:sample-4"},"away":{"teamId":10,"score":103.1,"managerId":"sample:sample-9"}}]},{"year":2022,"platform":"sample","leagueName":"Sample League","status":"complete","championTeamId":7,"championManagerId":"sample:sample-6","teams":[{"teamId":1,"name":"Gridiron Ghosts","ownerNames":["Alex"],"wins":7,"losses":7,"ties":0,"pf":1346.5,"pa":1341.8,"finalRank":6,"playoffSeed":null,"managerId":"sample:sample-0"},{"teamId":2,"name":"Blitz Krieg","ownerNames":["Brian"],"wins":9,"losses":5,"ties":0,"pf":1511.1,"pa":1494.6,"finalRank":4,"playoffSeed":3,"managerId":"sample:sample-1"},{"teamId":3,"name":"Fourth & Long","ownerNames":["Chris"],"wins":8,"losses":6,"ties":0,"pf":1502.8,"pa":1514.3,"finalRank":5,"playoffSeed":null,"managerId":"sample:sample-2"},{"teamId":4,"name":"Hail Marys","ownerNames":["Dana"],"wins":6,"losses":8,"ties":0,"pf":1444.8,"pa":1546.4,"finalRank":7,"playoffSeed":null,"managerId":"sample:sample-3"},{"teamId":5,"name":"Pocket Aces","ownerNames":["Eli"],"wins":5,"losses":9,"ties":0,"pf":1544.9,"pa":1593.8,"finalRank":8,"playoffSeed":null,"managerId":"sample:sample-4"},{"teamId":6,"name":"Red Zone Rebels","ownerNames":["Frank"],"wins":9,"losses":5,"ties":0,"pf":1539.1,"pa":1505.7,"finalRank":2,"playoffSeed":2,"managerId":"sample:sample-5"},{"teamId":7,"name":"Sack Attack","ownerNames":["Gina"],"wins":8,"losses":6,"ties":0,"pf":1509.4,"pa":1418.6,"finalRank":1,"playoffSeed":4,"managerId":"sample:sample-6"},{"teamId":8,"name":"Tight End Zone","ownerNames":["Hank"],"wins":4,"losses":10,"ties":0,"pf":1372.4,"pa":1489.3,"finalRank":10,"playoffSeed":null,"managerId":"sample:sample-7"},{"teamId":9,"name":"Waiver Wire Warriors","ownerNames":["Ivy"],"wins":9,"losses":5,"ties":0,"pf":1545.1,"pa":1371.3,"finalRank":3,"playoffSeed":1,"managerId":"sample:sample-8"},{"teamId":10,"name":"Punt Gods","ownerNames":["Jake"],"wins":5,"losses":9,"ties":0,"pf":1454.5,"pa":1494.8,"finalRank":9,"playoffSeed":null,"managerId":"sample:sample-9"}],"matchups":[{"week":1,"type":"regular","home":{"teamId":1,"score":103.6,"managerId":"sample:sample-0"},"away":{"teamId":2,"score":113,"managerId":"sample:sample-1"}},{"week":1,"type":"regular","home":{"teamId":3,"score":136.7,"managerId":"sample:sample-2"},"away":{"teamId":10,"score":97.7,"managerId":"sample:sample-9"}},{"week":1,"type":"regular","home":{"teamId":4,"score":134.7,"managerId":"sample:sample-3"},"away":{"teamId":9,"score":94.4,"managerId":"sample:sample-8"}},{"week":1,"type":"regular","home":{"teamId":5,"score":125.6,"managerId":"sample:sample-4"},"away":{"teamId":8,"score":116.8,"managerId":"sample:sample-7"}},{"week":1,"type":"regular","home":{"teamId":6,"score":103.2,"managerId":"sample:sample-5"},"away":{"teamId":7,"score":133.1,"managerId":"sample:sample-6"}},{"week":2,"type":"regular","home":{"teamId":1,"score":94.4,"managerId":"sample:sample-0"},"away":{"teamId":3,"score":100.6,"managerId":"sample:sample-2"}},{"week":2,"type":"regular","home":{"teamId":4,"score":109.8,"managerId":"sample:sample-3"},"away":{"teamId":2,"score":107.1,"managerId":"sample:sample-1"}},{"week":2,"type":"regular","home":{"teamId":5,"score":98,"managerId":"sample:sample-4"},"away":{"teamId":10,"score":91.1,"managerId":"sample:sample-9"}},{"week":2,"type":"regular","home":{"teamId":6,"score":103.1,"managerId":"sample:sample-5"},"away":{"teamId":9,"score":97,"managerId":"sample:sample-8"}},{"week":2,"type":"regular","home":{"teamId":7,"score":131.3,"managerId":"sample:sample-6"},"away":{"teamId":8,"score":105.3,"managerId":"sample:sample-7"}},{"week":3,"type":"regular","home":{"teamId":1,"score":110,"managerId":"sample:sample-0"},"away":{"teamId":4,"score":100.3,"managerId":"sample:sample-3"}},{"week":3,"type":"regular","home":{"teamId":5,"score":136.8,"managerId":"sample:sample-4"},"away":{"teamId":3,"score":116.9,"managerId":"sample:sample-2"}},{"week":3,"type":"regular","home":{"teamId":6,"score":135.8,"managerId":"sample:sample-5"},"away":{"teamId":2,"score":92.5,"managerId":"sample:sample-1"}},{"week":3,"type":"regular","home":{"teamId":7,"score":101.8,"managerId":"sample:sample-6"},"away":{"teamId":10,"score":104.2,"managerId":"sample:sample-9"}},{"week":3,"type":"regular","home":{"teamId":8,"score":80.7,"managerId":"sample:sample-7"},"away":{"teamId":9,"score":105.2,"managerId":"sample:sample-8"}},{"week":4,"type":"regular","home":{"teamId":1,"score":88.4,"managerId":"sample:sample-0"},"away":{"teamId":5,"score":91.5,"managerId":"sample:sample-4"}},{"week":4,"type":"regular","home":{"teamId":6,"score":123.8,"managerId":"sample:sample-5"},"away":{"teamId":4,"score":110.8,"managerId":"sample:sample-3"}},{"week":4,"type":"regular","home":{"teamId":7,"score":91.7,"managerId":"sample:sample-6"},"away":{"teamId":3,"score":94.4,"managerId":"sample:sample-2"}},{"week":4,"type":"regular","home":{"teamId":8,"score":87.5,"managerId":"sample:sample-7"},"away":{"teamId":2,"score":97,"managerId":"sample:sample-1"}},{"week":4,"type":"regular","home":{"teamId":9,"score":96.3,"managerId":"sample:sample-8"},"away":{"teamId":10,"score":68.3,"managerId":"sample:sample-9"}},{"week":5,"type":"regular","home":{"teamId":1,"score":85.7,"managerId":"sample:sample-0"},"away":{"teamId":6,"score":104.4,"managerId":"sample:sample-5"}},{"week":5,"type":"regular","home":{"teamId":7,"score":102.1,"managerId":"sample:sample-6"},"away":{"teamId":5,"score":102.3,"managerId":"sample:sample-4"}},{"week":5,"type":"regular","home":{"teamId":8,"score":96.2,"managerId":"sample:sample-7"},"away":{"teamId":4,"score":101.2,"managerId":"sample:sample-3"}},{"week":5,"type":"regular","home":{"teamId":9,"score":124.3,"managerId":"sample:sample-8"},"away":{"teamId":3,"score":83,"managerId":"sample:sample-2"}},{"week":5,"type":"regular","home":{"teamId":10,"score":97.3,"managerId":"sample:sample-9"},"away":{"teamId":2,"score":111,"managerId":"sample:sample-1"}},{"week":6,"type":"regular","home":{"teamId":1,"score":110.4,"managerId":"sample:sample-0"},"away":{"teamId":7,"score":104.1,"managerId":"sample:sample-6"}},{"week":6,"type":"regular","home":{"teamId":8,"score":86,"managerId":"sample:sample-7"},"away":{"teamId":6,"score":108.9,"managerId":"sample:sample-5"}},{"week":6,"type":"regular","home":{"teamId":9,"score":131.1,"managerId":"sample:sample-8"},"away":{"teamId":5,"score":126.8,"managerId":"sample:sample-4"}},{"week":6,"type":"regular","home":{"teamId":10,"score":99.1,"managerId":"sample:sample-9"},"away":{"teamId":4,"score":61.4,"managerId":"sample:sample-3"}},{"week":6,"type":"regular","home":{"teamId":2,"score":119.3,"managerId":"sample:sample-1"},"away":{"teamId":3,"score":100.4,"managerId":"sample:sample-2"}},{"week":7,"type":"regular","home":{"teamId":1,"score":70.7,"managerId":"sample:sample-0"},"away":{"teamId":8,"score":98.1,"managerId":"sample:sample-7"}},{"week":7,"type":"regular","home":{"teamId":9,"score":84.1,"managerId":"sample:sample-8"},"away":{"teamId":7,"score":91.5,"managerId":"sample:sample-6"}},{"week":7,"type":"regular","home":{"teamId":10,"score":133,"managerId":"sample:sample-9"},"away":{"teamId":6,"score":113.3,"managerId":"sample:sample-5"}},{"week":7,"type":"regular","home":{"teamId":2,"score":131.7,"managerId":"sample:sample-1"},"away":{"teamId":5,"score":111.2,"managerId":"sample:sample-4"}},{"week":7,"type":"regular","home":{"teamId":3,"score":138.4,"managerId":"sample:sample-2"},"away":{"teamId":4,"score":111.2,"managerId":"sample:sample-3"}},{"week":8,"type":"regular","home":{"teamId":1,"score":72.1,"managerId":"sample:sample-0"},"away":{"teamId":9,"score":112.7,"managerId":"sample:sample-8"}},{"week":8,"type":"regular","home":{"teamId":10,"score":107.8,"managerId":"sample:sample-9"},"away":{"teamId":8,"score":108.3,"managerId":"sample:sample-7"}},{"week":8,"type":"regular","home":{"teamId":2,"score":117.9,"managerId":"sample:sample-1"},"away":{"teamId":7,"score":106.4,"managerId":"sample:sample-6"}},{"week":8,"type":"regular","home":{"teamId":3,"score":96.4,"managerId":"sample:sample-2"},"away":{"teamId":6,"score":119.5,"managerId":"sample:sample-5"}},{"week":8,"type":"regular","home":{"teamId":4,"score":109.2,"managerId":"sample:sample-3"},"away":{"teamId":5,"score":108.9,"managerId":"sample:sample-4"}},{"week":9,"type":"regular","home":{"teamId":1,"score":101.2,"managerId":"sample:sample-0"},"away":{"teamId":10,"score":84,"managerId":"sample:sample-9"}},{"week":9,"type":"regular","home":{"teamId":2,"score":111.7,"managerId":"sample:sample-1"},"away":{"teamId":9,"score":103.4,"managerId":"sample:sample-8"}},{"week":9,"type":"regular","home":{"teamId":3,"score":106.8,"managerId":"sample:sample-2"},"away":{"teamId":8,"score":78.5,"managerId":"sample:sample-7"}},{"week":9,"type":"regular","home":{"teamId":4,"score":90.6,"managerId":"sample:sample-3"},"away":{"teamId":7,"score":110.1,"managerId":"sample:sample-6"}},{"week":9,"type":"regular","home":{"teamId":5,"score":134.2,"managerId":"sample:sample-4"},"away":{"teamId":6,"score":137.8,"managerId":"sample:sample-5"}},{"week":10,"type":"regular","home":{"teamId":1,"score":95.1,"managerId":"sample:sample-0"},"away":{"teamId":2,"score":80,"managerId":"sample:sample-1"}},{"week":10,"type":"regular","home":{"teamId":3,"score":122.5,"managerId":"sample:sample-2"},"away":{"teamId":10,"score":116.2,"managerId":"sample:sample-9"}},{"week":10,"type":"regular","home":{"teamId":4,"score":108.6,"managerId":"sample:sample-3"},"away":{"teamId":9,"score":98.7,"managerId":"sample:sample-8"}},{"week":10,"type":"regular","home":{"teamId":5,"score":105.1,"managerId":"sample:sample-4"},"away":{"teamId":8,"score":106.3,"managerId":"sample:sample-7"}},{"week":10,"type":"regular","home":{"teamId":6,"score":93.5,"managerId":"sample:sample-5"},"away":{"teamId":7,"score":121.1,"managerId":"sample:sample-6"}},{"week":11,"type":"regular","home":{"teamId":1,"score":90.1,"managerId":"sample:sample-0"},"away":{"teamId":3,"score":90.9,"managerId":"sample:sample-2"}},{"week":11,"type":"regular","home":{"teamId":4,"score":111.6,"managerId":"sample:sample-3"},"away":{"teamId":2,"score":129.5,"managerId":"sample:sample-1"}},{"week":11,"type":"regular","home":{"teamId":5,"score":102.4,"managerId":"sample:sample-4"},"away":{"teamId":10,"score":119.8,"managerId":"sample:sample-9"}},{"week":11,"type":"regular","home":{"teamId":6,"score":89.3,"managerId":"sample:sample-5"},"away":{"teamId":9,"score":124.4,"managerId":"sample:sample-8"}},{"week":11,"type":"regular","home":{"teamId":7,"score":86.4,"managerId":"sample:sample-6"},"away":{"teamId":8,"score":116.7,"managerId":"sample:sample-7"}},{"week":12,"type":"regular","home":{"teamId":1,"score":112.3,"managerId":"sample:sample-0"},"away":{"teamId":4,"score":95,"managerId":"sample:sample-3"}},{"week":12,"type":"regular","home":{"teamId":5,"score":113.6,"managerId":"sample:sample-4"},"away":{"teamId":3,"score":123.7,"managerId":"sample:sample-2"}},{"week":12,"type":"regular","home":{"teamId":6,"score":109.9,"managerId":"sample:sample-5"},"away":{"teamId":2,"score":97.7,"managerId":"sample:sample-1"}},{"week":12,"type":"regular","home":{"teamId":7,"score":135.2,"managerId":"sample:sample-6"},"away":{"teamId":10,"score":102.8,"managerId":"sample:sample-9"}},{"week":12,"type":"regular","home":{"teamId":8,"score":92.6,"managerId":"sample:sample-7"},"away":{"teamId":9,"score":127.3,"managerId":"sample:sample-8"}},{"week":13,"type":"regular","home":{"teamId":1,"score":116.4,"managerId":"sample:sample-0"},"away":{"teamId":5,"score":87.3,"managerId":"sample:sample-4"}},{"week":13,"type":"regular","home":{"teamId":6,"score":116.7,"managerId":"sample:sample-5"},"away":{"teamId":4,"score":97.7,"managerId":"sample:sample-3"}},{"week":13,"type":"regular","home":{"teamId":7,"score":92.1,"managerId":"sample:sample-6"},"away":{"teamId":3,"score":92,"managerId":"sample:sample-2"}},{"week":13,"type":"regular","home":{"teamId":8,"score":98.2,"managerId":"sample:sample-7"},"away":{"teamId":2,"score":113.3,"managerId":"sample:sample-1"}},{"week":13,"type":"regular","home":{"teamId":9,"score":117.3,"managerId":"sample:sample-8"},"away":{"teamId":10,"score":108.8,"managerId":"sample:sample-9"}},{"week":14,"type":"regular","home":{"teamId":1,"score":96.1,"managerId":"sample:sample-0"},"away":{"teamId":6,"score":79.9,"managerId":"sample:sample-5"}},{"week":14,"type":"regular","home":{"teamId":7,"score":102.5,"managerId":"sample:sample-6"},"away":{"teamId":5,"score":101.2,"managerId":"sample:sample-4"}},{"week":14,"type":"regular","home":{"teamId":8,"score":101.2,"managerId":"sample:sample-7"},"away":{"teamId":4,"score":102.7,"managerId":"sample:sample-3"}},{"week":14,"type":"regular","home":{"teamId":9,"score":128.9,"managerId":"sample:sample-8"},"away":{"teamId":3,"score":100.1,"managerId":"sample:sample-2"}},{"week":14,"type":"regular","home":{"teamId":10,"score":124.4,"managerId":"sample:sample-9"},"away":{"teamId":2,"score":89.4,"managerId":"sample:sample-1"}},{"week":15,"type":"playoff","home":{"teamId":9,"score":102.5,"managerId":"sample:sample-8"},"away":{"teamId":7,"score":116.7,"managerId":"sample:sample-6"}},{"week":15,"type":"playoff","home":{"teamId":6,"score":122.6,"managerId":"sample:sample-5"},"away":{"teamId":2,"score":113.4,"managerId":"sample:sample-1"}},{"week":16,"type":"playoff","home":{"teamId":7,"score":134.9,"managerId":"sample:sample-6"},"away":{"teamId":6,"score":84.3,"managerId":"sample:sample-5"}},{"week":16,"type":"playoff","home":{"teamId":9,"score":143.8,"managerId":"sample:sample-8"},"away":{"teamId":2,"score":76,"managerId":"sample:sample-1"}}]},{"year":2023,"platform":"sample","leagueName":"Sample League","status":"complete","championTeamId":1,"championManagerId":"sample:sample-0","teams":[{"teamId":1,"name":"Gridiron Ghosts","ownerNames":["Alex"],"wins":9,"losses":5,"ties":0,"pf":1523.3,"pa":1443,"finalRank":1,"playoffSeed":3,"managerId":"sample:sample-0"},{"teamId":2,"name":"Blitz Krieg","ownerNames":["Brian"],"wins":7,"losses":7,"ties":0,"pf":1492.2,"pa":1489.1,"finalRank":6,"playoffSeed":null,"managerId":"sample:sample-1"},{"teamId":3,"name":"Fourth & Long","ownerNames":["Chris"],"wins":8,"losses":6,"ties":0,"pf":1529.4,"pa":1436.1,"finalRank":2,"playoffSeed":4,"managerId":"sample:sample-2"},{"teamId":4,"name":"Hail Marys","ownerNames":["Dana"],"wins":5,"losses":9,"ties":0,"pf":1343.8,"pa":1495.8,"finalRank":8,"playoffSeed":null,"managerId":"sample:sample-3"},{"teamId":5,"name":"Pocket Aces","ownerNames":["Eli"],"wins":4,"losses":10,"ties":0,"pf":1473.3,"pa":1665.9,"finalRank":9,"playoffSeed":null,"managerId":"sample:sample-4"},{"teamId":6,"name":"Red Zone Rebels","ownerNames":["Frank"],"wins":6,"losses":8,"ties":0,"pf":1464.4,"pa":1496.4,"finalRank":7,"playoffSeed":null,"managerId":"sample:sample-5"},{"teamId":7,"name":"Sack Attack","ownerNames":["Gina"],"wins":4,"losses":10,"ties":0,"pf":1437,"pa":1451.6,"finalRank":10,"playoffSeed":null,"managerId":"sample:sample-6"},{"teamId":8,"name":"Tight End Zone","ownerNames":["Hank"],"wins":9,"losses":5,"ties":0,"pf":1570.2,"pa":1471.3,"finalRank":4,"playoffSeed":2,"managerId":"sample:sample-7"},{"teamId":9,"name":"Waiver Wire Warriors","ownerNames":["Ivy"],"wins":10,"losses":4,"ties":0,"pf":1579.5,"pa":1433.9,"finalRank":3,"playoffSeed":1,"managerId":"sample:sample-8"},{"teamId":10,"name":"Punt Gods","ownerNames":["Jake"],"wins":8,"losses":6,"ties":0,"pf":1495.8,"pa":1525.8,"finalRank":5,"playoffSeed":null,"managerId":"sample:sample-9"}],"matchups":[{"week":1,"type":"regular","home":{"teamId":1,"score":133.8,"managerId":"sample:sample-0"},"away":{"teamId":2,"score":104.1,"managerId":"sample:sample-1"}},{"week":1,"type":"regular","home":{"teamId":3,"score":101.7,"managerId":"sample:sample-2"},"away":{"teamId":10,"score":102.8,"managerId":"sample:sample-9"}},{"week":1,"type":"regular","home":{"teamId":4,"score":82.3,"managerId":"sample:sample-3"},"away":{"teamId":9,"score":88.2,"managerId":"sample:sample-8"}},{"week":1,"type":"regular","home":{"teamId":5,"score":104.5,"managerId":"sample:sample-4"},"away":{"teamId":8,"score":115.7,"managerId":"sample:sample-7"}},{"week":1,"type":"regular","home":{"teamId":6,"score":102.8,"managerId":"sample:sample-5"},"away":{"teamId":7,"score":88.4,"managerId":"sample:sample-6"}},{"week":2,"type":"regular","home":{"teamId":1,"score":121.8,"managerId":"sample:sample-0"},"away":{"teamId":3,"score":100.6,"managerId":"sample:sample-2"}},{"week":2,"type":"regular","home":{"teamId":4,"score":76.3,"managerId":"sample:sample-3"},"away":{"teamId":2,"score":123.3,"managerId":"sample:sample-1"}},{"week":2,"type":"regular","home":{"teamId":5,"score":109.2,"managerId":"sample:sample-4"},"away":{"teamId":10,"score":130,"managerId":"sample:sample-9"}},{"week":2,"type":"regular","home":{"teamId":6,"score":99.7,"managerId":"sample:sample-5"},"away":{"teamId":9,"score":131,"managerId":"sample:sample-8"}},{"week":2,"type":"regular","home":{"teamId":7,"score":111,"managerId":"sample:sample-6"},"away":{"teamId":8,"score":74,"managerId":"sample:sample-7"}},{"week":3,"type":"regular","home":{"teamId":1,"score":61.2,"managerId":"sample:sample-0"},"away":{"teamId":4,"score":94.9,"managerId":"sample:sample-3"}},{"week":3,"type":"regular","home":{"teamId":5,"score":103.6,"managerId":"sample:sample-4"},"away":{"teamId":3,"score":120.9,"managerId":"sample:sample-2"}},{"week":3,"type":"regular","home":{"teamId":6,"score":92.3,"managerId":"sample:sample-5"},"away":{"teamId":2,"score":88.1,"managerId":"sample:sample-1"}},{"week":3,"type":"regular","home":{"teamId":7,"score":88.8,"managerId":"sample:sample-6"},"away":{"teamId":10,"score":103.4,"managerId":"sample:sample-9"}},{"week":3,"type":"regular","home":{"teamId":8,"score":98,"managerId":"sample:sample-7"},"away":{"teamId":9,"score":87.6,"managerId":"sample:sample-8"}},{"week":4,"type":"regular","home":{"teamId":1,"score":108.4,"managerId":"sample:sample-0"},"away":{"teamId":5,"score":126.7,"managerId":"sample:sample-4"}},{"week":4,"type":"regular","home":{"teamId":6,"score":134.6,"managerId":"sample:sample-5"},"away":{"teamId":4,"score":82.9,"managerId":"sample:sample-3"}},{"week":4,"type":"regular","home":{"teamId":7,"score":66.7,"managerId":"sample:sample-6"},"away":{"teamId":3,"score":100.8,"managerId":"sample:sample-2"}},{"week":4,"type":"regular","home":{"teamId":8,"score":91.5,"managerId":"sample:sample-7"},"away":{"teamId":2,"score":115,"managerId":"sample:sample-1"}},{"week":4,"type":"regular","home":{"teamId":9,"score":121.7,"managerId":"sample:sample-8"},"away":{"teamId":10,"score":101.5,"managerId":"sample:sample-9"}},{"week":5,"type":"regular","home":{"teamId":1,"score":91.9,"managerId":"sample:sample-0"},"away":{"teamId":6,"score":96.6,"managerId":"sample:sample-5"}},{"week":5,"type":"regular","home":{"teamId":7,"score":115.9,"managerId":"sample:sample-6"},"away":{"teamId":5,"score":88.9,"managerId":"sample:sample-4"}},{"week":5,"type":"regular","home":{"teamId":8,"score":125.5,"managerId":"sample:sample-7"},"away":{"teamId":4,"score":86.9,"managerId":"sample:sample-3"}},{"week":5,"type":"regular","home":{"teamId":9,"score":133.7,"managerId":"sample:sample-8"},"away":{"teamId":3,"score":92.1,"managerId":"sample:sample-2"}},{"week":5,"type":"regular","home":{"teamId":10,"score":87.4,"managerId":"sample:sample-9"},"away":{"teamId":2,"score":110.4,"managerId":"sample:sample-1"}},{"week":6,"type":"regular","home":{"teamId":1,"score":124,"managerId":"sample:sample-0"},"away":{"teamId":7,"score":121,"managerId":"sample:sample-6"}},{"week":6,"type":"regular","home":{"teamId":8,"score":118.7,"managerId":"sample:sample-7"},"away":{"teamId":6,"score":103.6,"managerId":"sample:sample-5"}},{"week":6,"type":"regular","home":{"teamId":9,"score":120.7,"managerId":"sample:sample-8"},"away":{"teamId":5,"score":133.7,"managerId":"sample:sample-4"}},{"week":6,"type":"regular","home":{"teamId":10,"score":91.1,"managerId":"sample:sample-9"},"away":{"teamId":4,"score":103.5,"managerId":"sample:sample-3"}},{"week":6,"type":"regular","home":{"teamId":2,"score":100.7,"managerId":"sample:sample-1"},"away":{"teamId":3,"score":147,"managerId":"sample:sample-2"}},{"week":7,"type":"regular","home":{"teamId":1,"score":141.6,"managerId":"sample:sample-0"},"away":{"teamId":8,"score":119.6,"managerId":"sample:sample-7"}},{"week":7,"type":"regular","home":{"teamId":9,"score":109.3,"managerId":"sample:sample-8"},"away":{"teamId":7,"score":98.9,"managerId":"sample:sample-6"}},{"week":7,"type":"regular","home":{"teamId":10,"score":137.2,"managerId":"sample:sample-9"},"away":{"teamId":6,"score":124.4,"managerId":"sample:sample-5"}},{"week":7,"type":"regular","home":{"teamId":2,"score":94.2,"managerId":"sample:sample-1"},"away":{"teamId":5,"score":140.8,"managerId":"sample:sample-4"}},{"week":7,"type":"regular","home":{"teamId":3,"score":90,"managerId":"sample:sample-2"},"away":{"teamId":4,"score":101.9,"managerId":"sample:sample-3"}},{"week":8,"type":"regular","home":{"teamId":1,"score":73.7,"managerId":"sample:sample-0"},"away":{"teamId":9,"score":120.4,"managerId":"sample:sample-8"}},{"week":8,"type":"regular","home":{"teamId":10,"score":104,"managerId":"sample:sample-9"},"away":{"teamId":8,"score":144.3,"managerId":"sample:sample-7"}},{"week":8,"type":"regular","home":{"teamId":2,"score":93.8,"managerId":"sample:sample-1"},"away":{"teamId":7,"score":108.6,"managerId":"sample:sample-6"}},{"week":8,"type":"regular","home":{"teamId":3,"score":108.7,"managerId":"sample:sample-2"},"away":{"teamId":6,"score":60.1,"managerId":"sample:sample-5"}},{"week":8,"type":"regular","home":{"teamId":4,"score":139.2,"managerId":"sample:sample-3"},"away":{"teamId":5,"score":103.1,"managerId":"sample:sample-4"}},{"week":9,"type":"regular","home":{"teamId":1,"score":106.3,"managerId":"sample:sample-0"},"away":{"teamId":10,"score":69.1,"managerId":"sample:sample-9"}},{"week":9,"type":"regular","home":{"teamId":2,"score":97.6,"managerId":"sample:sample-1"},"away":{"teamId":9,"score":97.3,"managerId":"sample:sample-8"}},{"week":9,"type":"regular","home":{"teamId":3,"score":122.3,"managerId":"sample:sample-2"},"away":{"teamId":8,"score":106.1,"managerId":"sample:sample-7"}},{"week":9,"type":"regular","home":{"teamId":4,"score":92.9,"managerId":"sample:sample-3"},"away":{"teamId":7,"score":124.5,"managerId":"sample:sample-6"}},{"week":9,"type":"regular","home":{"teamId":5,"score":89.2,"managerId":"sample:sample-4"},"away":{"teamId":6,"score":132.1,"managerId":"sample:sample-5"}},{"week":10,"type":"regular","home":{"teamId":1,"score":82.7,"managerId":"sample:sample-0"},"away":{"teamId":2,"score":123.7,"managerId":"sample:sample-1"}},{"week":10,"type":"regular","home":{"teamId":3,"score":90.7,"managerId":"sample:sample-2"},"away":{"teamId":10,"score":112.6,"managerId":"sample:sample-9"}},{"week":10,"type":"regular","home":{"teamId":4,"score":89.4,"managerId":"sample:sample-3"},"away":{"teamId":9,"score":93.8,"managerId":"sample:sample-8"}},{"week":10,"type":"regular","home":{"teamId":5,"score":76.2,"managerId":"sample:sample-4"},"away":{"teamId":8,"score":109.5,"managerId":"sample:sample-7"}},{"week":10,"type":"regular","home":{"teamId":6,"score":123.7,"managerId":"sample:sample-5"},"away":{"teamId":7,"score":98.8,"managerId":"sample:sample-6"}},{"week":11,"type":"regular","home":{"teamId":1,"score":108.1,"managerId":"sample:sample-0"},"away":{"teamId":3,"score":93.1,"managerId":"sample:sample-2"}},{"week":11,"type":"regular","home":{"teamId":4,"score":102.1,"managerId":"sample:sample-3"},"away":{"teamId":2,"score":122.1,"managerId":"sample:sample-1"}},{"week":11,"type":"regular","home":{"teamId":5,"score":100.5,"managerId":"sample:sample-4"},"away":{"teamId":10,"score":116.3,"managerId":"sample:sample-9"}},{"week":11,"type":"regular","home":{"teamId":6,"score":125.6,"managerId":"sample:sample-5"},"away":{"teamId":9,"score":131.5,"managerId":"sample:sample-8"}},{"week":11,"type":"regular","home":{"teamId":7,"score":115.8,"managerId":"sample:sample-6"},"away":{"teamId":8,"score":116.4,"managerId":"sample:sample-7"}},{"week":12,"type":"regular","home":{"teamId":1,"score":113.7,"managerId":"sample:sample-0"},"away":{"teamId":4,"score":100.2,"managerId":"sample:sample-3"}},{"week":12,"type":"regular","home":{"teamId":5,"score":106.4,"managerId":"sample:sample-4"},"away":{"teamId":3,"score":122.2,"managerId":"sample:sample-2"}},{"week":12,"type":"regular","home":{"teamId":6,"score":80.5,"managerId":"sample:sample-5"},"away":{"teamId":2,"score":97,"managerId":"sample:sample-1"}},{"week":12,"type":"regular","home":{"teamId":7,"score":100.4,"managerId":"sample:sample-6"},"away":{"teamId":10,"score":117.1,"managerId":"sample:sample-9"}},{"week":12,"type":"regular","home":{"teamId":8,"score":102.1,"managerId":"sample:sample-7"},"away":{"teamId":9,"score":110.9,"managerId":"sample:sample-8"}},{"week":13,"type":"regular","home":{"teamId":1,"score":135.5,"managerId":"sample:sample-0"},"away":{"teamId":5,"score":84.8,"managerId":"sample:sample-4"}},{"week":13,"type":"regular","home":{"teamId":6,"score":100.2,"managerId":"sample:sample-5"},"away":{"teamId":4,"score":112.4,"managerId":"sample:sample-3"}},{"week":13,"type":"regular","home":{"teamId":7,"score":92.9,"managerId":"sample:sample-6"},"away":{"teamId":3,"score":98.8,"managerId":"sample:sample-2"}},{"week":13,"type":"regular","home":{"teamId":8,"score":124.3,"managerId":"sample:sample-7"},"away":{"teamId":2,"score":113,"managerId":"sample:sample-1"}},{"week":13,"type":"regular","home":{"teamId":9,"score":114.7,"managerId":"sample:sample-8"},"away":{"teamId":10,"score":98.8,"managerId":"sample:sample-9"}},{"week":14,"type":"regular","home":{"teamId":1,"score":120.6,"managerId":"sample:sample-0"},"away":{"teamId":6,"score":88.2,"managerId":"sample:sample-5"}},{"week":14,"type":"regular","home":{"teamId":7,"score":105.3,"managerId":"sample:sample-6"},"away":{"teamId":5,"score":105.7,"managerId":"sample:sample-4"}},{"week":14,"type":"regular","home":{"teamId":8,"score":124.5,"managerId":"sample:sample-7"},"away":{"teamId":4,"score":78.9,"managerId":"sample:sample-3"}},{"week":14,"type":"regular","home":{"teamId":9,"score":118.7,"managerId":"sample:sample-8"},"away":{"teamId":3,"score":140.5,"managerId":"sample:sample-2"}},{"week":14,"type":"regular","home":{"teamId":10,"score":124.5,"managerId":"sample:sample-9"},"away":{"teamId":2,"score":109.2,"managerId":"sample:sample-1"}},{"week":15,"type":"playoff","home":{"teamId":9,"score":77.2,"managerId":"sample:sample-8"},"away":{"teamId":3,"score":109.2,"managerId":"sample:sample-2"}},{"week":15,"type":"playoff","home":{"teamId":8,"score":89.4,"managerId":"sample:sample-7"},"away":{"teamId":1,"score":110.3,"managerId":"sample:sample-0"}},{"week":16,"type":"playoff","home":{"teamId":3,"score":73.2,"managerId":"sample:sample-2"},"away":{"teamId":1,"score":93.9,"managerId":"sample:sample-0"}},{"week":16,"type":"playoff","home":{"teamId":9,"score":83.9,"managerId":"sample:sample-8"},"away":{"teamId":8,"score":71.4,"managerId":"sample:sample-7"}}]},{"year":2024,"platform":"sample","leagueName":"Sample League","status":"complete","championTeamId":4,"championManagerId":"sample:sample-3","teams":[{"teamId":1,"name":"Gridiron Ghosts","ownerNames":["Alex"],"wins":7,"losses":7,"ties":0,"pf":1477.9,"pa":1396.3,"finalRank":7,"playoffSeed":null,"managerId":"sample:sample-0"},{"teamId":2,"name":"Blitz Krieg","ownerNames":["Brian"],"wins":9,"losses":5,"ties":0,"pf":1532.3,"pa":1444.3,"finalRank":4,"playoffSeed":1,"managerId":"sample:sample-1"},{"teamId":3,"name":"Fourth & Long","ownerNames":["Chris"],"wins":8,"losses":6,"ties":0,"pf":1492.9,"pa":1462.8,"finalRank":3,"playoffSeed":3,"managerId":"sample:sample-2"},{"teamId":4,"name":"Hail Marys","ownerNames":["Dana"],"wins":9,"losses":5,"ties":0,"pf":1453.3,"pa":1448.4,"finalRank":1,"playoffSeed":2,"managerId":"sample:sample-3"},{"teamId":5,"name":"Pocket Aces","ownerNames":["Eli"],"wins":8,"losses":6,"ties":0,"pf":1490.7,"pa":1436.1,"finalRank":2,"playoffSeed":4,"managerId":"sample:sample-4"},{"teamId":6,"name":"Red Zone Rebels","ownerNames":["Frank"],"wins":5,"losses":9,"ties":0,"pf":1368,"pa":1487.2,"finalRank":9,"playoffSeed":null,"managerId":"sample:sample-5"},{"teamId":7,"name":"Sack Attack","ownerNames":["Gina"],"wins":4,"losses":10,"ties":0,"pf":1417,"pa":1531.3,"finalRank":10,"playoffSeed":null,"managerId":"sample:sample-6"},{"teamId":8,"name":"Tight End Zone","ownerNames":["Hank"],"wins":6,"losses":8,"ties":0,"pf":1341.1,"pa":1484.6,"finalRank":8,"playoffSeed":null,"managerId":"sample:sample-7"},{"teamId":9,"name":"Waiver Wire Warriors","ownerNames":["Ivy"],"wins":7,"losses":7,"ties":0,"pf":1512.9,"pa":1475.1,"finalRank":6,"playoffSeed":null,"managerId":"sample:sample-8"},{"teamId":10,"name":"Punt Gods","ownerNames":["Jake"],"wins":7,"losses":7,"ties":0,"pf":1528.6,"pa":1448.6,"finalRank":5,"playoffSeed":null,"managerId":"sample:sample-9"}],"matchups":[{"week":1,"type":"regular","home":{"teamId":1,"score":103.9,"managerId":"sample:sample-0"},"away":{"teamId":2,"score":131,"managerId":"sample:sample-1"}},{"week":1,"type":"regular","home":{"teamId":3,"score":79.5,"managerId":"sample:sample-2"},"away":{"teamId":10,"score":108.7,"managerId":"sample:sample-9"}},{"week":1,"type":"regular","home":{"teamId":4,"score":71.7,"managerId":"sample:sample-3"},"away":{"teamId":9,"score":139.4,"managerId":"sample:sample-8"}},{"week":1,"type":"regular","home":{"teamId":5,"score":109.4,"managerId":"sample:sample-4"},"away":{"teamId":8,"score":79.9,"managerId":"sample:sample-7"}},{"week":1,"type":"regular","home":{"teamId":6,"score":103.4,"managerId":"sample:sample-5"},"away":{"teamId":7,"score":119.5,"managerId":"sample:sample-6"}},{"week":2,"type":"regular","home":{"teamId":1,"score":144.5,"managerId":"sample:sample-0"},"away":{"teamId":3,"score":92.1,"managerId":"sample:sample-2"}},{"week":2,"type":"regular","home":{"teamId":4,"score":121.9,"managerId":"sample:sample-3"},"away":{"teamId":2,"score":118.7,"managerId":"sample:sample-1"}},{"week":2,"type":"regular","home":{"teamId":5,"score":126.9,"managerId":"sample:sample-4"},"away":{"teamId":10,"score":98.5,"managerId":"sample:sample-9"}},{"week":2,"type":"regular","home":{"teamId":6,"score":104.5,"managerId":"sample:sample-5"},"away":{"teamId":9,"score":97,"managerId":"sample:sample-8"}},{"week":2,"type":"regular","home":{"teamId":7,"score":99.9,"managerId":"sample:sample-6"},"away":{"teamId":8,"score":118.8,"managerId":"sample:sample-7"}},{"week":3,"type":"regular","home":{"teamId":1,"score":128.5,"managerId":"sample:sample-0"},"away":{"teamId":4,"score":120.1,"managerId":"sample:sample-3"}},{"week":3,"type":"regular","home":{"teamId":5,"score":103.7,"managerId":"sample:sample-4"},"away":{"teamId":3,"score":132.7,"managerId":"sample:sample-2"}},{"week":3,"type":"regular","home":{"teamId":6,"score":126.9,"managerId":"sample:sample-5"},"away":{"teamId":2,"score":126.5,"managerId":"sample:sample-1"}},{"week":3,"type":"regular","home":{"teamId":7,"score":90.4,"managerId":"sample:sample-6"},"away":{"teamId":10,"score":119.5,"managerId":"sample:sample-9"}},{"week":3,"type":"regular","home":{"teamId":8,"score":69.7,"managerId":"sample:sample-7"},"away":{"teamId":9,"score":101.6,"managerId":"sample:sample-8"}},{"week":4,"type":"regular","home":{"teamId":1,"score":85.4,"managerId":"sample:sample-0"},"away":{"teamId":5,"score":103.6,"managerId":"sample:sample-4"}},{"week":4,"type":"regular","home":{"teamId":6,"score":95.6,"managerId":"sample:sample-5"},"away":{"teamId":4,"score":110.1,"managerId":"sample:sample-3"}},{"week":4,"type":"regular","home":{"teamId":7,"score":102.2,"managerId":"sample:sample-6"},"away":{"teamId":3,"score":111,"managerId":"sample:sample-2"}},{"week":4,"type":"regular","home":{"teamId":8,"score":75.5,"managerId":"sample:sample-7"},"away":{"teamId":2,"score":109.3,"managerId":"sample:sample-1"}},{"week":4,"type":"regular","home":{"teamId":9,"score":90.6,"managerId":"sample:sample-8"},"away":{"teamId":10,"score":115.5,"managerId":"sample:sample-9"}},{"week":5,"type":"regular","home":{"teamId":1,"score":97.6,"managerId":"sample:sample-0"},"away":{"teamId":6,"score":64.4,"managerId":"sample:sample-5"}},{"week":5,"type":"regular","home":{"teamId":7,"score":96.2,"managerId":"sample:sample-6"},"away":{"teamId":5,"score":98.8,"managerId":"sample:sample-4"}},{"week":5,"type":"regular","home":{"teamId":8,"score":77.9,"managerId":"sample:sample-7"},"away":{"teamId":4,"score":105.5,"managerId":"sample:sample-3"}},{"week":5,"type":"regular","home":{"teamId":9,"score":117.7,"managerId":"sample:sample-8"},"away":{"teamId":3,"score":93.9,"managerId":"sample:sample-2"}},{"week":5,"type":"regular","home":{"teamId":10,"score":86.7,"managerId":"sample:sample-9"},"away":{"teamId":2,"score":103.3,"managerId":"sample:sample-1"}},{"week":6,"type":"regular","home":{"teamId":1,"score":122.2,"managerId":"sample:sample-0"},"away":{"teamId":7,"score":86.9,"managerId":"sample:sample-6"}},{"week":6,"type":"regular","home":{"teamId":8,"score":116.7,"managerId":"sample:sample-7"},"away":{"teamId":6,"score":88,"managerId":"sample:sample-5"}},{"week":6,"type":"regular","home":{"teamId":9,"score":124.1,"managerId":"sample:sample-8"},"away":{"teamId":5,"score":104.3,"managerId":"sample:sample-4"}},{"week":6,"type":"regular","home":{"teamId":10,"score":102.6,"managerId":"sample:sample-9"},"away":{"teamId":4,"score":109.1,"managerId":"sample:sample-3"}},{"week":6,"type":"regular","home":{"teamId":2,"score":103,"managerId":"sample:sample-1"},"away":{"teamId":3,"score":118.8,"managerId":"sample:sample-2"}},{"week":7,"type":"regular","home":{"teamId":1,"score":87.5,"managerId":"sample:sample-0"},"away":{"teamId":8,"score":113.8,"managerId":"sample:sample-7"}},{"week":7,"type":"regular","home":{"teamId":9,"score":123.3,"managerId":"sample:sample-8"},"away":{"teamId":7,"score":83.5,"managerId":"sample:sample-6"}},{"week":7,"type":"regular","home":{"teamId":10,"score":140.3,"managerId":"sample:sample-9"},"away":{"teamId":6,"score":89.4,"managerId":"sample:sample-5"}},{"week":7,"type":"regular","home":{"teamId":2,"score":95.4,"managerId":"sample:sample-1"},"away":{"teamId":5,"score":80.6,"managerId":"sample:sample-4"}},{"week":7,"type":"regular","home":{"teamId":3,"score":92,"managerId":"sample:sample-2"},"away":{"teamId":4,"score":117.7,"managerId":"sample:sample-3"}},{"week":8,"type":"regular","home":{"teamId":1,"score":97.6,"managerId":"sample:sample-0"},"away":{"teamId":9,"score":97.9,"managerId":"sample:sample-8"}},{"week":8,"type":"regular","home":{"teamId":10,"score":142.6,"managerId":"sample:sample-9"},"away":{"teamId":8,"score":78.8,"managerId":"sample:sample-7"}},{"week":8,"type":"regular","home":{"teamId":2,"score":110.9,"managerId":"sample:sample-1"},"away":{"teamId":7,"score":99,"managerId":"sample:sample-6"}},{"week":8,"type":"regular","home":{"teamId":3,"score":122.7,"managerId":"sample:sample-2"},"away":{"teamId":6,"score":67.1,"managerId":"sample:sample-5"}},{"week":8,"type":"regular","home":{"teamId":4,"score":90.5,"managerId":"sample:sample-3"},"away":{"teamId":5,"score":111,"managerId":"sample:sample-4"}},{"week":9,"type":"regular","home":{"teamId":1,"score":90.8,"managerId":"sample:sample-0"},"away":{"teamId":10,"score":69,"managerId":"sample:sample-9"}},{"week":9,"type":"regular","home":{"teamId":2,"score":114.9,"managerId":"sample:sample-1"},"away":{"teamId":9,"score":107.9,"managerId":"sample:sample-8"}},{"week":9,"type":"regular","home":{"teamId":3,"score":110.5,"managerId":"sample:sample-2"},"away":{"teamId":8,"score":78.2,"managerId":"sample:sample-7"}},{"week":9,"type":"regular","home":{"teamId":4,"score":91.1,"managerId":"sample:sample-3"},"away":{"teamId":7,"score":106,"managerId":"sample:sample-6"}},{"week":9,"type":"regular","home":{"teamId":5,"score":95.1,"managerId":"sample:sample-4"},"away":{"teamId":6,"score":150,"managerId":"sample:sample-5"}},{"week":10,"type":"regular","home":{"teamId":1,"score":110,"managerId":"sample:sample-0"},"away":{"teamId":2,"score":96.5,"managerId":"sample:sample-1"}},{"week":10,"type":"regular","home":{"teamId":3,"score":97.4,"managerId":"sample:sample-2"},"away":{"teamId":10,"score":93,"managerId":"sample:sample-9"}},{"week":10,"type":"regular","home":{"teamId":4,"score":109.5,"managerId":"sample:sample-3"},"away":{"teamId":9,"score":84.5,"managerId":"sample:sample-8"}},{"week":10,"type":"regular","home":{"teamId":5,"score":102.9,"managerId":"sample:sample-4"},"away":{"teamId":8,"score":110.1,"managerId":"sample:sample-7"}},{"week":10,"type":"regular","home":{"teamId":6,"score":107.1,"managerId":"sample:sample-5"},"away":{"teamId":7,"score":107.2,"managerId":"sample:sample-6"}},{"week":11,"type":"regular","home":{"teamId":1,"score":118,"managerId":"sample:sample-0"},"away":{"teamId":3,"score":93,"managerId":"sample:sample-2"}},{"week":11,"type":"regular","home":{"teamId":4,"score":120.3,"managerId":"sample:sample-3"},"away":{"teamId":2,"score":94.9,"managerId":"sample:sample-1"}},{"week":11,"type":"regular","home":{"teamId":5,"score":106.8,"managerId":"sample:sample-4"},"away":{"teamId":10,"score":113.1,"managerId":"sample:sample-9"}},{"week":11,"type":"regular","home":{"teamId":6,"score":108,"managerId":"sample:sample-5"},"away":{"teamId":9,"score":86,"managerId":"sample:sample-8"}},{"week":11,"type":"regular","home":{"teamId":7,"score":93.4,"managerId":"sample:sample-6"},"away":{"teamId":8,"score":94.8,"managerId":"sample:sample-7"}},{"week":12,"type":"regular","home":{"teamId":1,"score":107.4,"managerId":"sample:sample-0"},"away":{"teamId":4,"score":112.3,"managerId":"sample:sample-3"}},{"week":12,"type":"regular","home":{"teamId":5,"score":99.5,"managerId":"sample:sample-4"},"away":{"teamId":3,"score":96.2,"managerId":"sample:sample-2"}},{"week":12,"type":"regular","home":{"teamId":6,"score":87.3,"managerId":"sample:sample-5"},"away":{"teamId":2,"score":92.9,"managerId":"sample:sample-1"}},{"week":12,"type":"regular","home":{"teamId":7,"score":145.3,"managerId":"sample:sample-6"},"away":{"teamId":10,"score":79.2,"managerId":"sample:sample-9"}},{"week":12,"type":"regular","home":{"teamId":8,"score":134.2,"managerId":"sample:sample-7"},"away":{"teamId":9,"score":154.3,"managerId":"sample:sample-8"}},{"week":13,"type":"regular","home":{"teamId":1,"score":101.1,"managerId":"sample:sample-0"},"away":{"teamId":5,"score":122.2,"managerId":"sample:sample-4"}},{"week":13,"type":"regular","home":{"teamId":6,"score":82.8,"managerId":"sample:sample-5"},"away":{"teamId":4,"score":92.2,"managerId":"sample:sample-3"}},{"week":13,"type":"regular","home":{"teamId":7,"score":124.6,"managerId":"sample:sample-6"},"away":{"teamId":3,"score":125.3,"managerId":"sample:sample-2"}},{"week":13,"type":"regular","home":{"teamId":8,"score":85.6,"managerId":"sample:sample-7"},"away":{"teamId":2,"score":98.4,"managerId":"sample:sample-1"}},{"week":13,"type":"regular","home":{"teamId":9,"score":103.7,"managerId":"sample:sample-8"},"away":{"teamId":10,"score":140,"managerId":"sample:sample-9"}},{"week":14,"type":"regular","home":{"teamId":1,"score":83.4,"managerId":"sample:sample-0"},"away":{"teamId":6,"score":93.5,"managerId":"sample:sample-5"}},{"week":14,"type":"regular","home":{"teamId":7,"score":62.9,"managerId":"sample:sample-6"},"away":{"teamId":5,"score":125.9,"managerId":"sample:sample-4"}},{"week":14,"type":"regular","home":{"teamId":8,"score":107.1,"managerId":"sample:sample-7"},"away":{"teamId":4,"score":81.3,"managerId":"sample:sample-3"}},{"week":14,"type":"regular","home":{"teamId":9,"score":84.9,"managerId":"sample:sample-8"},"away":{"teamId":3,"score":127.8,"managerId":"sample:sample-2"}},{"week":14,"type":"regular","home":{"teamId":10,"score":119.9,"managerId":"sample:sample-9"},"away":{"teamId":2,"score":136.6,"managerId":"sample:sample-1"}},{"week":15,"type":"playoff","home":{"teamId":2,"score":88.6,"managerId":"sample:sample-1"},"away":{"teamId":5,"score":107,"managerId":"sample:sample-4"}},{"week":15,"type":"playoff","home":{"teamId":4,"score":89.9,"managerId":"sample:sample-3"},"away":{"teamId":3,"score":85.2,"managerId":"sample:sample-2"}},{"week":16,"type":"playoff","home":{"teamId":5,"score":102.7,"managerId":"sample:sample-4"},"away":{"teamId":4,"score":107.4,"managerId":"sample:sample-3"}},{"week":16,"type":"playoff","home":{"teamId":2,"score":86.1,"managerId":"sample:sample-1"},"away":{"teamId":3,"score":87,"managerId":"sample:sample-2"}}]},{"year":2025,"platform":"sample","leagueName":"Sample League","status":"complete","championTeamId":5,"championManagerId":"sample:sample-4","teams":[{"teamId":1,"name":"Gridiron Ghosts","ownerNames":["Alex"],"wins":5,"losses":9,"ties":0,"pf":1448.7,"pa":1489.3,"finalRank":9,"playoffSeed":null,"managerId":"sample:sample-0"},{"teamId":2,"name":"Blitz Krieg","ownerNames":["Brian"],"wins":7,"losses":7,"ties":0,"pf":1440.7,"pa":1419.7,"finalRank":6,"playoffSeed":null,"managerId":"sample:sample-1"},{"teamId":3,"name":"Fourth & Long","ownerNames":["Chris"],"wins":7,"losses":7,"ties":0,"pf":1411.9,"pa":1355.4,"finalRank":7,"playoffSeed":null,"managerId":"sample:sample-2"},{"teamId":4,"name":"Hail Marys","ownerNames":["Dana"],"wins":9,"losses":5,"ties":0,"pf":1424,"pa":1387.3,"finalRank":3,"playoffSeed":1,"managerId":"sample:sample-3"},{"teamId":5,"name":"Pocket Aces","ownerNames":["Eli"],"wins":8,"losses":6,"ties":0,"pf":1428.6,"pa":1407.4,"finalRank":1,"playoffSeed":3,"managerId":"sample:sample-4"},{"teamId":6,"name":"Red Zone Rebels","ownerNames":["Frank"],"wins":4,"losses":10,"ties":0,"pf":1516.5,"pa":1599.9,"finalRank":10,"playoffSeed":null,"managerId":"sample:sample-5"},{"teamId":7,"name":"Sack Attack","ownerNames":["Gina"],"wins":7,"losses":7,"ties":0,"pf":1486.3,"pa":1439.6,"finalRank":5,"playoffSeed":null,"managerId":"sample:sample-6"},{"teamId":8,"name":"Tight End Zone","ownerNames":["Hank"],"wins":8,"losses":6,"ties":0,"pf":1529.2,"pa":1515,"finalRank":4,"playoffSeed":2,"managerId":"sample:sample-7"},{"teamId":9,"name":"Waiver Wire Warriors","ownerNames":["Ivy"],"wins":8,"losses":6,"ties":0,"pf":1396.3,"pa":1465.6,"finalRank":2,"playoffSeed":4,"managerId":"sample:sample-8"},{"teamId":10,"name":"Punt Gods","ownerNames":["Jake"],"wins":7,"losses":7,"ties":0,"pf":1328.8,"pa":1331.8,"finalRank":8,"playoffSeed":null,"managerId":"sample:sample-9"}],"matchups":[{"week":1,"type":"regular","home":{"teamId":1,"score":116.1,"managerId":"sample:sample-0"},"away":{"teamId":2,"score":96.6,"managerId":"sample:sample-1"}},{"week":1,"type":"regular","home":{"teamId":3,"score":108.3,"managerId":"sample:sample-2"},"away":{"teamId":10,"score":65,"managerId":"sample:sample-9"}},{"week":1,"type":"regular","home":{"teamId":4,"score":111.1,"managerId":"sample:sample-3"},"away":{"teamId":9,"score":85.1,"managerId":"sample:sample-8"}},{"week":1,"type":"regular","home":{"teamId":5,"score":94.5,"managerId":"sample:sample-4"},"away":{"teamId":8,"score":119.2,"managerId":"sample:sample-7"}},{"week":1,"type":"regular","home":{"teamId":6,"score":85.4,"managerId":"sample:sample-5"},"away":{"teamId":7,"score":123,"managerId":"sample:sample-6"}},{"week":2,"type":"regular","home":{"teamId":1,"score":89.4,"managerId":"sample:sample-0"},"away":{"teamId":3,"score":137.7,"managerId":"sample:sample-2"}},{"week":2,"type":"regular","home":{"teamId":4,"score":69.1,"managerId":"sample:sample-3"},"away":{"teamId":2,"score":103.4,"managerId":"sample:sample-1"}},{"week":2,"type":"regular","home":{"teamId":5,"score":86.4,"managerId":"sample:sample-4"},"away":{"teamId":10,"score":73.1,"managerId":"sample:sample-9"}},{"week":2,"type":"regular","home":{"teamId":6,"score":126.5,"managerId":"sample:sample-5"},"away":{"teamId":9,"score":133.5,"managerId":"sample:sample-8"}},{"week":2,"type":"regular","home":{"teamId":7,"score":151.1,"managerId":"sample:sample-6"},"away":{"teamId":8,"score":143.6,"managerId":"sample:sample-7"}},{"week":3,"type":"regular","home":{"teamId":1,"score":137.1,"managerId":"sample:sample-0"},"away":{"teamId":4,"score":89.7,"managerId":"sample:sample-3"}},{"week":3,"type":"regular","home":{"teamId":5,"score":87.9,"managerId":"sample:sample-4"},"away":{"teamId":3,"score":103.3,"managerId":"sample:sample-2"}},{"week":3,"type":"regular","home":{"teamId":6,"score":125.5,"managerId":"sample:sample-5"},"away":{"teamId":2,"score":135.4,"managerId":"sample:sample-1"}},{"week":3,"type":"regular","home":{"teamId":7,"score":99.7,"managerId":"sample:sample-6"},"away":{"teamId":10,"score":108.2,"managerId":"sample:sample-9"}},{"week":3,"type":"regular","home":{"teamId":8,"score":135.8,"managerId":"sample:sample-7"},"away":{"teamId":9,"score":128,"managerId":"sample:sample-8"}},{"week":4,"type":"regular","home":{"teamId":1,"score":92.4,"managerId":"sample:sample-0"},"away":{"teamId":5,"score":118,"managerId":"sample:sample-4"}},{"week":4,"type":"regular","home":{"teamId":6,"score":74.7,"managerId":"sample:sample-5"},"away":{"teamId":4,"score":106.9,"managerId":"sample:sample-3"}},{"week":4,"type":"regular","home":{"teamId":7,"score":93.6,"managerId":"sample:sample-6"},"away":{"teamId":3,"score":114,"managerId":"sample:sample-2"}},{"week":4,"type":"regular","home":{"teamId":8,"score":66.8,"managerId":"sample:sample-7"},"away":{"teamId":2,"score":110.3,"managerId":"sample:sample-1"}},{"week":4,"type":"regular","home":{"teamId":9,"score":89.5,"managerId":"sample:sample-8"},"away":{"teamId":10,"score":146.1,"managerId":"sample:sample-9"}},{"week":5,"type":"regular","home":{"teamId":1,"score":119.6,"managerId":"sample:sample-0"},"away":{"teamId":6,"score":158.1,"managerId":"sample:sample-5"}},{"week":5,"type":"regular","home":{"teamId":7,"score":118.9,"managerId":"sample:sample-6"},"away":{"teamId":5,"score":73.4,"managerId":"sample:sample-4"}},{"week":5,"type":"regular","home":{"teamId":8,"score":111.6,"managerId":"sample:sample-7"},"away":{"teamId":4,"score":100.6,"managerId":"sample:sample-3"}},{"week":5,"type":"regular","home":{"teamId":9,"score":117.2,"managerId":"sample:sample-8"},"away":{"teamId":3,"score":100.3,"managerId":"sample:sample-2"}},{"week":5,"type":"regular","home":{"teamId":10,"score":102.9,"managerId":"sample:sample-9"},"away":{"teamId":2,"score":101.9,"managerId":"sample:sample-1"}},{"week":6,"type":"regular","home":{"teamId":1,"score":102.3,"managerId":"sample:sample-0"},"away":{"teamId":7,"score":71.7,"managerId":"sample:sample-6"}},{"week":6,"type":"regular","home":{"teamId":8,"score":103.7,"managerId":"sample:sample-7"},"away":{"teamId":6,"score":106.3,"managerId":"sample:sample-5"}},{"week":6,"type":"regular","home":{"teamId":9,"score":90.6,"managerId":"sample:sample-8"},"away":{"teamId":5,"score":108.7,"managerId":"sample:sample-4"}},{"week":6,"type":"regular","home":{"teamId":10,"score":62,"managerId":"sample:sample-9"},"away":{"teamId":4,"score":63.8,"managerId":"sample:sample-3"}},{"week":6,"type":"regular","home":{"teamId":2,"score":102.6,"managerId":"sample:sample-1"},"away":{"teamId":3,"score":91,"managerId":"sample:sample-2"}},{"week":7,"type":"regular","home":{"teamId":1,"score":115.3,"managerId":"sample:sample-0"},"away":{"teamId":8,"score":116.2,"managerId":"sample:sample-7"}},{"week":7,"type":"regular","home":{"teamId":9,"score":107.3,"managerId":"sample:sample-8"},"away":{"teamId":7,"score":94.9,"managerId":"sample:sample-6"}},{"week":7,"type":"regular","home":{"teamId":10,"score":132.9,"managerId":"sample:sample-9"},"away":{"teamId":6,"score":122.1,"managerId":"sample:sample-5"}},{"week":7,"type":"regular","home":{"teamId":2,"score":123,"managerId":"sample:sample-1"},"away":{"teamId":5,"score":99.8,"managerId":"sample:sample-4"}},{"week":7,"type":"regular","home":{"teamId":3,"score":84.9,"managerId":"sample:sample-2"},"away":{"teamId":4,"score":120.2,"managerId":"sample:sample-3"}},{"week":8,"type":"regular","home":{"teamId":1,"score":73.9,"managerId":"sample:sample-0"},"away":{"teamId":9,"score":89.6,"managerId":"sample:sample-8"}},{"week":8,"type":"regular","home":{"teamId":10,"score":103.5,"managerId":"sample:sample-9"},"away":{"teamId":8,"score":105.8,"managerId":"sample:sample-7"}},{"week":8,"type":"regular","home":{"teamId":2,"score":101.7,"managerId":"sample:sample-1"},"away":{"teamId":7,"score":111,"managerId":"sample:sample-6"}},{"week":8,"type":"regular","home":{"teamId":3,"score":102.9,"managerId":"sample:sample-2"},"away":{"teamId":6,"score":74.6,"managerId":"sample:sample-5"}},{"week":8,"type":"regular","home":{"teamId":4,"score":100.4,"managerId":"sample:sample-3"},"away":{"teamId":5,"score":86.2,"managerId":"sample:sample-4"}},{"week":9,"type":"regular","home":{"teamId":1,"score":102.5,"managerId":"sample:sample-0"},"away":{"teamId":10,"score":61.1,"managerId":"sample:sample-9"}},{"week":9,"type":"regular","home":{"teamId":2,"score":104.9,"managerId":"sample:sample-1"},"away":{"teamId":9,"score":118.7,"managerId":"sample:sample-8"}},{"week":9,"type":"regular","home":{"teamId":3,"score":101.4,"managerId":"sample:sample-2"},"away":{"teamId":8,"score":84.9,"managerId":"sample:sample-7"}},{"week":9,"type":"regular","home":{"teamId":4,"score":108.2,"managerId":"sample:sample-3"},"away":{"teamId":7,"score":105.3,"managerId":"sample:sample-6"}},{"week":9,"type":"regular","home":{"teamId":5,"score":120.8,"managerId":"sample:sample-4"},"away":{"teamId":6,"score":109.1,"managerId":"sample:sample-5"}},{"week":10,"type":"regular","home":{"teamId":1,"score":86.1,"managerId":"sample:sample-0"},"away":{"teamId":2,"score":89.2,"managerId":"sample:sample-1"}},{"week":10,"type":"regular","home":{"teamId":3,"score":122.7,"managerId":"sample:sample-2"},"away":{"teamId":10,"score":104.7,"managerId":"sample:sample-9"}},{"week":10,"type":"regular","home":{"teamId":4,"score":81.5,"managerId":"sample:sample-3"},"away":{"teamId":9,"score":109.9,"managerId":"sample:sample-8"}},{"week":10,"type":"regular","home":{"teamId":5,"score":107.8,"managerId":"sample:sample-4"},"away":{"teamId":8,"score":83.2,"managerId":"sample:sample-7"}},{"week":10,"type":"regular","home":{"teamId":6,"score":114.8,"managerId":"sample:sample-5"},"away":{"teamId":7,"score":82.9,"managerId":"sample:sample-6"}},{"week":11,"type":"regular","home":{"teamId":1,"score":101.1,"managerId":"sample:sample-0"},"away":{"teamId":3,"score":95.2,"managerId":"sample:sample-2"}},{"week":11,"type":"regular","home":{"teamId":4,"score":129.7,"managerId":"sample:sample-3"},"away":{"teamId":2,"score":84.9,"managerId":"sample:sample-1"}},{"week":11,"type":"regular","home":{"teamId":5,"score":87.3,"managerId":"sample:sample-4"},"away":{"teamId":10,"score":109.5,"managerId":"sample:sample-9"}},{"week":11,"type":"regular","home":{"teamId":6,"score":86.6,"managerId":"sample:sample-5"},"away":{"teamId":9,"score":98.8,"managerId":"sample:sample-8"}},{"week":11,"type":"regular","home":{"teamId":7,"score":96.7,"managerId":"sample:sample-6"},"away":{"teamId":8,"score":73,"managerId":"sample:sample-7"}},{"week":12,"type":"regular","home":{"teamId":1,"score":106.5,"managerId":"sample:sample-0"},"away":{"teamId":4,"score":126.1,"managerId":"sample:sample-3"}},{"week":12,"type":"regular","home":{"teamId":5,"score":109.2,"managerId":"sample:sample-4"},"away":{"teamId":3,"score":95,"managerId":"sample:sample-2"}},{"week":12,"type":"regular","home":{"teamId":6,"score":112.8,"managerId":"sample:sample-5"},"away":{"teamId":2,"score":121.8,"managerId":"sample:sample-1"}},{"week":12,"type":"regular","home":{"teamId":7,"score":118.6,"managerId":"sample:sample-6"},"away":{"teamId":10,"score":90.7,"managerId":"sample:sample-9"}},{"week":12,"type":"regular","home":{"teamId":8,"score":139.1,"managerId":"sample:sample-7"},"away":{"teamId":9,"score":85.8,"managerId":"sample:sample-8"}},{"week":13,"type":"regular","home":{"teamId":1,"score":79.8,"managerId":"sample:sample-0"},"away":{"teamId":5,"score":111,"managerId":"sample:sample-4"}},{"week":13,"type":"regular","home":{"teamId":6,"score":90.9,"managerId":"sample:sample-5"},"away":{"teamId":4,"score":91.1,"managerId":"sample:sample-3"}},{"week":13,"type":"regular","home":{"teamId":7,"score":109,"managerId":"sample:sample-6"},"away":{"teamId":3,"score":79.4,"managerId":"sample:sample-2"}},{"week":13,"type":"regular","home":{"teamId":8,"score":101.5,"managerId":"sample:sample-7"},"away":{"teamId":2,"score":88.1,"managerId":"sample:sample-1"}},{"week":13,"type":"regular","home":{"teamId":9,"score":46.3,"managerId":"sample:sample-8"},"away":{"teamId":10,"score":80.4,"managerId":"sample:sample-9"}},{"week":14,"type":"regular","home":{"teamId":1,"score":126.6,"managerId":"sample:sample-0"},"away":{"teamId":6,"score":129.1,"managerId":"sample:sample-5"}},{"week":14,"type":"regular","home":{"teamId":7,"score":109.9,"managerId":"sample:sample-6"},"away":{"teamId":5,"score":137.6,"managerId":"sample:sample-4"}},{"week":14,"type":"regular","home":{"teamId":8,"score":144.8,"managerId":"sample:sample-7"},"away":{"teamId":4,"score":125.6,"managerId":"sample:sample-3"}},{"week":14,"type":"regular","home":{"teamId":9,"score":96,"managerId":"sample:sample-8"},"away":{"teamId":3,"score":75.8,"managerId":"sample:sample-2"}},{"week":14,"type":"regular","home":{"teamId":10,"score":88.7,"managerId":"sample:sample-9"},"away":{"teamId":2,"score":76.9,"managerId":"sample:sample-1"}},{"week":15,"type":"playoff","home":{"teamId":4,"score":89.9,"managerId":"sample:sample-3"},"away":{"teamId":9,"score":123.3,"managerId":"sample:sample-8"}},{"week":15,"type":"playoff","home":{"teamId":8,"score":106,"managerId":"sample:sample-7"},"away":{"teamId":5,"score":112.5,"managerId":"sample:sample-4"}},{"week":16,"type":"playoff","home":{"teamId":9,"score":86.3,"managerId":"sample:sample-8"},"away":{"teamId":5,"score":120.7,"managerId":"sample:sample-4"}},{"week":16,"type":"playoff","home":{"teamId":4,"score":142.4,"managerId":"sample:sample-3"},"away":{"teamId":8,"score":90,"managerId":"sample:sample-7"}}]}]};
+// All the math lives here (no HTML), so it's easy to test and to extend with new stats.
+// Input is the object from data/history.json.
+
+const pct = (w, l, t) => {
+  const g = w + l + t;
+  return g ? (w + t / 2) / g : 0;
+};
+
+function prepare(data) {
+  const managers = new Map(data.managers.map((m) => [m.id, m.name]));
+  const seasons = [...data.seasons].sort((a, b) => a.year - b.year);
+  return { data, seasons, managers, name: (id) => managers.get(id) ?? "Unclaimed" };
+}
+
+// Flat list of games, oldest first. Consolation games are left out unless asked for.
+function games(ctx, withConsolation = false) {
+  const out = [];
+  for (const s of ctx.seasons) {
+    const teamName = new Map(s.teams.map((t) => [t.teamId, t.name]));
+    for (const g of s.matchups) {
+      if (!withConsolation && g.type === "consolation") continue;
+      out.push({
+        year: s.year, week: g.week, type: g.type,
+        a: { m: g.home.managerId, team: teamName.get(g.home.teamId), score: g.home.score },
+        b: { m: g.away.managerId, team: teamName.get(g.away.teamId), score: g.away.score },
+      });
+    }
+  }
+  return out.sort((x, y) => x.year - y.year || x.week - y.week);
+}
+
+function champions(ctx) {
+  return [...ctx.seasons].reverse().map((s) => {
+    const champ = s.teams.find((t) => t.teamId === s.championTeamId);
+    const runner = s.teams.find((t) => t.finalRank === 2);
+    const who = (t) => t && { team: t.name, manager: ctx.name(t.managerId) };
+    return { year: s.year, platform: s.platform, champion: who(champ), runnerUp: who(runner) };
+  });
+}
+
+function seasonYears(ctx) {
+  return ctx.seasons.map((s) => s.year).reverse();
+}
+
+function standings(ctx, year) {
+  const s = ctx.seasons.find((x) => x.year === year);
+  if (!s) return [];
+  return [...s.teams]
+    .sort((a, b) => b.wins - a.wins || a.losses - b.losses || b.pf - a.pf)
+    .map((t, i) => ({ ...t, rank: i + 1, manager: ctx.name(t.managerId), champion: t.teamId === s.championTeamId }));
+}
+
+function allTime(ctx) {
+  const rows = new Map();
+  const row = (id) => {
+    if (!rows.has(id)) rows.set(id, { managerId: id, name: ctx.name(id), seasons: 0, w: 0, l: 0, t: 0, pf: 0, pa: 0, titles: [], runnerUps: [], playoffs: 0 });
+    return rows.get(id);
+  };
+  for (const s of ctx.seasons) {
+    const madePlayoffs = new Set();
+    for (const g of s.matchups) {
+      if (g.type !== "playoff") continue;
+      if (g.home.managerId) madePlayoffs.add(g.home.managerId);
+      if (g.away.managerId) madePlayoffs.add(g.away.managerId);
+    }
+    for (const t of s.teams) {
+      if (!t.managerId) continue;
+      const r = row(t.managerId);
+      r.seasons++; r.w += t.wins ?? 0; r.l += t.losses ?? 0; r.t += t.ties ?? 0; r.pf += t.pf ?? 0; r.pa += t.pa ?? 0;
+      if (t.teamId === s.championTeamId) r.titles.push(s.year);
+      if (t.finalRank === 2) r.runnerUps.push(s.year);
+    }
+    for (const id of madePlayoffs) row(id).playoffs++;
+  }
+  return [...rows.values()]
+    .map((r) => ({ ...r, pct: pct(r.w, r.l, r.t) }))
+    .sort((a, b) => b.titles.length - a.titles.length || b.pct - a.pct);
+}
+
+function headToHead(ctx) {
+  const all = games(ctx);
+  const ids = [...new Set(all.flatMap((g) => [g.a.m, g.b.m]).filter(Boolean))]
+    .sort((x, y) => ctx.name(x).localeCompare(ctx.name(y)));
+  const rec = new Map();
+  const bump = (me, opp, pf, pa) => {
+    const k = `${me}|${opp}`;
+    const r = rec.get(k) ?? { w: 0, l: 0, t: 0, pf: 0, pa: 0 };
+    if (pf > pa) r.w++; else if (pf < pa) r.l++; else r.t++;
+    r.pf += pf; r.pa += pa;
+    rec.set(k, r);
+  };
+  for (const g of all) {
+    if (!g.a.m || !g.b.m || g.a.m === g.b.m) continue;
+    bump(g.a.m, g.b.m, g.a.score, g.b.score);
+    bump(g.b.m, g.a.m, g.b.score, g.a.score);
+  }
+  return { ids, get: (a, b) => rec.get(`${a}|${b}`) ?? null };
+}
+
+function pairGames(ctx, a, b) {
+  return games(ctx)
+    .filter((g) => (g.a.m === a && g.b.m === b) || (g.a.m === b && g.b.m === a))
+    .reverse();
+}
+
+function records(ctx, top = 5) {
+  const gs = games(ctx);
+
+  const singles = gs.flatMap((g) => [
+    { year: g.year, week: g.week, m: g.a.m, team: g.a.team, score: g.a.score, opp: g.b.team },
+    { year: g.year, week: g.week, m: g.b.m, team: g.b.team, score: g.b.score, opp: g.a.team },
+  ]);
+  const highScores = [...singles].sort((x, y) => y.score - x.score).slice(0, top);
+  const lowScores = singles.filter((s) => s.score > 0).sort((x, y) => x.score - y.score).slice(0, top);
+
+  const margins = gs.map((g) => {
+    const [win, lose] = g.a.score >= g.b.score ? [g.a, g.b] : [g.b, g.a];
+    return { year: g.year, week: g.week, winner: win, loser: lose, margin: win.score - lose.score };
+  });
+  const biggestMargins = [...margins].sort((x, y) => y.margin - x.margin).slice(0, top);
+  const closestGames = margins.filter((g) => g.margin > 0).sort((x, y) => x.margin - y.margin).slice(0, top);
+
+  const seasonPF = ctx.seasons
+    .flatMap((s) => s.teams.map((t) => ({ year: s.year, team: t.name, manager: ctx.name(t.managerId), pf: t.pf ?? 0 })))
+    .sort((x, y) => y.pf - x.pf).slice(0, top);
+
+  const perManager = new Map();
+  for (const g of gs) {
+    for (const [me, opp] of [[g.a, g.b], [g.b, g.a]]) {
+      if (!me.m) continue;
+      const result = me.score > opp.score ? "W" : me.score < opp.score ? "L" : "T";
+      const list = perManager.get(me.m) ?? [];
+      list.push({ result, year: g.year, week: g.week });
+      perManager.set(me.m, list);
+    }
+  }
+  const streaks = (kind) => {
+    const out = [];
+    for (const [m, list] of perManager) {
+      let run = 0, best = 0, end = -1;
+      list.forEach((x, i) => {
+        if (x.result === kind) { run++; if (run > best) { best = run; end = i; } } else run = 0;
+      });
+      if (best > 0) out.push({ manager: ctx.name(m), length: best, from: list[end - best + 1], to: list[end] });
+    }
+    return out.sort((x, y) => y.length - x.length).slice(0, top);
+  };
+
+  return { highScores, lowScores, biggestMargins, closestGames, seasonPF, winStreaks: streaks("W"), loseStreaks: streaks("L") };
+}
+
+// Turns stats into HTML. This is the file to edit when you want to change how a page is laid out.
+
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const f1 = (n) => Number(n ?? 0).toFixed(1);
+const pct3 = (p) => p.toFixed(3).replace(/^0/, "");
+const rec = (w, l, t) => (t ? `${w}-${l}-${t}` : `${w}-${l}`);
+const when = (year, week) => `${year} wk ${week}`;
+const trophy = "\u{1F3C6}";
+
+const table = (heads, rows, cls = "") => `
+  <div class="table-wrap"><table class="${cls}">
+    <thead><tr>${heads.map((h) => `<th>${h}</th>`).join("")}</tr></thead>
+    <tbody>${rows.map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join("")}</tr>`).join("")}</tbody>
+  </table></div>`;
+
+const section = (title, body, note = "") =>
+  `<section class="card"><h2>${esc(title)}</h2>${note ? `<p class="note">${esc(note)}</p>` : ""}${body}</section>`;
+
+function championsView(ctx) {
+  const rows = champions(ctx).map((c) => [
+    esc(c.year),
+    c.champion ? `${trophy} <strong>${esc(c.champion.manager)}</strong>` : `<span class="muted">not decided</span>`,
+    c.champion ? esc(c.champion.team) : "",
+    c.runnerUp ? `${esc(c.runnerUp.manager)} <span class="muted">(${esc(c.runnerUp.team)})</span>` : `<span class="muted">-</span>`,
+  ]);
+  return section("Champions", table(["Year", "Champion", "Team", "Runner-up"], rows));
+}
+
+function standingsView(ctx, year) {
+  const years = seasonYears(ctx);
+  const y = years.includes(year) ? year : years[0];
+  const select = `<label class="inline">Season <select id="year-select">${years
+    .map((v) => `<option value="${v}"${v === y ? " selected" : ""}>${v}</option>`).join("")}</select></label>`;
+  const rows = standings(ctx, y).map((t) => [
+    esc(t.rank),
+    `${t.champion ? trophy + " " : ""}<strong>${esc(t.name)}</strong>`,
+    esc(t.manager),
+    rec(t.wins, t.losses, t.ties),
+    f1(t.pf), f1(t.pa),
+    t.finalRank ? esc(t.finalRank) : `<span class="muted">-</span>`,
+  ]);
+  return section(`${y} standings`, select + table(["#", "Team", "Manager", "Record", "PF", "PA", "Final"], rows),
+    "Order is regular-season record, then points for. Final is the playoff finish where the platform reports it.");
+}
+
+function allTimeView(ctx) {
+  const hasGames = ctx.seasons.some((s) => s.matchups.length);
+  const rows = allTime(ctx).map((r) => [
+    `<strong>${esc(r.name)}</strong>`,
+    esc(r.seasons),
+    rec(r.w, r.l, r.t),
+    pct3(r.pct),
+    f1(r.pf),
+    r.titles.length ? `${trophy} ${r.titles.length}` : "0",
+    esc(r.runnerUps.length),
+    ...(hasGames ? [esc(r.playoffs)] : []),
+  ]);
+  const heads = ["Manager", "Seasons", "Record", "Win %", "Points for", "Titles", "Runner-ups", ...(hasGames ? ["Playoffs"] : [])];
+  return section("All-time leaderboard", table(heads, rows), "Regular-season records only. Sorted by titles, then win %.");
+}
+
+function h2hView(ctx, a, b) {
+  const h = headToHead(ctx);
+  if (!h.ids.length) return section("Head-to-head", `<p class="muted">Head-to-head needs weekly scores, which haven’t been added yet.</p>`);
+  const short = (id) => esc(ctx.name(id));
+  const matrix = table(
+    ["", ...h.ids.map(short)],
+    h.ids.map((row) => [
+      `<strong>${short(row)}</strong>`,
+      ...h.ids.map((col) => {
+        if (row === col) return `<span class="muted">-</span>`;
+        const r = h.get(row, col);
+        if (!r) return `<span class="muted">-</span>`;
+        const cls = r.w > r.l ? "win" : r.w < r.l ? "loss" : "even";
+        return `<span class="pill ${cls}">${rec(r.w, r.l, r.t)}</span>`;
+      }),
+    ]),
+    "matrix"
+  );
+
+  const A = h.ids.includes(a) ? a : h.ids[0];
+  const B = h.ids.includes(b) && b !== A ? b : h.ids.find((x) => x !== A);
+  const opt = (sel) => h.ids.map((id) => `<option value="${esc(id)}"${id === sel ? " selected" : ""}>${short(id)}</option>`).join("");
+  let detail = "";
+  if (A && B) {
+    const r = h.get(A, B);
+    const list = pairGames(ctx, A, B).slice(0, 15).map((g) => {
+      const mine = g.a.m === A ? g.a : g.b;
+      const theirs = g.a.m === A ? g.b : g.a;
+      return [when(g.year, g.week) + (g.type === "playoff" ? " (playoffs)" : ""), `${f1(mine.score)} - ${f1(theirs.score)}`,
+        mine.score > theirs.score ? short(A) : mine.score < theirs.score ? short(B) : "Tie"];
+    });
+    detail = `
+      <div class="pickers">
+        <label class="inline"><select id="h2h-a">${opt(A)}</select></label>
+        <span>vs</span>
+        <label class="inline"><select id="h2h-b">${opt(B)}</select></label>
+      </div>
+      ${r ? `<p class="big">${short(A)} leads ${rec(r.w, r.l, r.t)} <span class="muted">(${f1(r.pf)} - ${f1(r.pa)} total points)</span></p>
+             ${table(["When", "Score", "Winner"], list)}` : `<p class="muted">These two have never played each other.</p>`}`;
+  }
+  return section("Head-to-head", matrix, "Read across: the row manager’s record against the column manager. Regular season and playoffs.") +
+    section("Matchup detail", detail);
+}
+
+function recordsView(ctx) {
+  const r = records(ctx);
+  const hasGames = ctx.seasons.some((s) => s.matchups.length);
+  const gameRow = (s) => [`<strong>${f1(s.score)}</strong>`, esc(s.team), `<span class="muted">vs ${esc(s.opp)}</span>`, when(s.year, s.week)];
+  const marginRow = (g) => [`<strong>${f1(g.margin)}</strong>`, esc(g.winner.team), `<span class="muted">over ${esc(g.loser.team)}</span>`, when(g.year, g.week)];
+  const streakRow = (s) => [`<strong>${s.length}</strong>`, esc(s.manager), `${when(s.from.year, s.from.week)} to ${when(s.to.year, s.to.week)}`];
+  const H = ["", "Team", "", "When"];
+  const pfSection = section("Most points in a season", table(["PF", "Team", "Manager", "Year"], r.seasonPF.map((s) => [`<strong>${f1(s.pf)}</strong>`, esc(s.team), esc(s.manager), esc(s.year)])));
+  if (!hasGames) return `<div class="grid">${pfSection}</div><p class="muted">Single-game records and streaks need weekly scores, which haven’t been added yet.</p>`;
+  return `<div class="grid">
+    ${section("Highest score", table(H, r.highScores.map(gameRow)))}
+    ${section("Lowest score", table(H, r.lowScores.map(gameRow)))}
+    ${section("Biggest blowouts", table(H, r.biggestMargins.map(marginRow)))}
+    ${section("Closest games", table(H, r.closestGames.map(marginRow)))}
+    ${section("Most points in a season", table(["PF", "Team", "Manager", "Year"], r.seasonPF.map((s) => [`<strong>${f1(s.pf)}</strong>`, esc(s.team), esc(s.manager), esc(s.year)])))}
+    ${section("Longest win streaks", table(["Games", "Manager", "Span"], r.winStreaks.map(streakRow)), "Streaks carry across seasons.")}
+    ${section("Longest losing streaks", table(["Games", "Manager", "Span"], r.loseStreaks.map(streakRow)))}
+  </div>`;
+}
+
+function managersView(ctx) {
+  const hasGames = ctx.seasons.some((s) => s.matchups.length);
+  const cards = allTime(ctx).map((r) => `
+    <article class="card manager">
+      <h3>${esc(r.name)}</h3>
+      <p class="trophies">${r.titles.length ? r.titles.map((y) => `${trophy} ${y}`).join("<br>") : `<span class="muted">No titles yet</span>`}</p>
+      <dl>
+        <dt>Record</dt><dd>${rec(r.w, r.l, r.t)} (${pct3(r.pct)})</dd>
+        <dt>Seasons</dt><dd>${esc(r.seasons)}</dd>
+        ${hasGames ? `<dt>Playoff trips</dt><dd>${esc(r.playoffs)}</dd>` : ""}
+        <dt>Runner-up</dt><dd>${r.runnerUps.length ? esc(r.runnerUps.join(", ")) : "-"}</dd>
+      </dl>
+    </article>`).join("");
+  return `<div class="cards">${cards}</div>`;
+}
+
+// Hosted version: the league data lives in the page's shared database and is entered inside the app.
+const SAMPLE = DATA; // embedded sample league, shown until the first real season is saved
+
+let rows = [];          // saved season documents
+let ctx = null;
+let db = null, sampleNs = null, imageLimit = null;
+let canWrite = null;    // true / false / null (unknown: let a refused save decide)
+let status = "";
+let busy = false;
+let confirmDel = null;
+let pendingFiles = [];
+let gameDocs = new Map(); // year -> { year, games: [...] }
+let gdraft = { year: "", games: [], text: "", weekHint: "" };
+let gFiles = [];
+let confirmDelGames = null;
+let storageNote = "";
+const EDIT_PIN = String((typeof CONFIG !== "undefined" && CONFIG && CONFIG.editPin) || "");
+let unlocked = !EDIT_PIN;
+try { if (EDIT_PIN && localStorage.getItem("fh-unlocked") === EDIT_PIN) unlocked = true; } catch {}
+const params = { year: null, a: null, b: null };
+let draft = newDraft();
+
+const use = (name) => (window.claude && window.claude.use ? window.claude.use(name).catch(() => null) : Promise.resolve(null));
+const slug = (s) => String(s || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+
+function blankTeam() { return { name: "", manager: "", wins: "", losses: "", ties: "", pf: "", pa: "" }; }
+function newDraft() { return { year: "", teams: Array.from({ length: 10 }, blankTeam), champIdx: -1, runnerIdx: -1, text: "" }; }
+
+const norm = (s) => String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+function matchTeam(name, names) {
+  const n = norm(name);
+  if (!n) return null;
+  const exact = names.find((x) => norm(x) === n);
+  if (exact) return exact;
+  if (n.length >= 4) {
+    const part = names.filter((x) => { const k = norm(x); return k && (k.includes(n) || n.includes(k)); });
+    if (part.length === 1) return part[0];
+  }
+  return null;
+}
+
+// Saved season docs (+ saved weekly games) -> the shape the stats and views expect.
+function toHistory(docs, gdocs) {
+  const managers = new Map();
+  let unmatched = 0;
+  const seasons = [...docs].sort((a, b) => a.year - b.year).map((d) => {
+    const teams = (d.teams || []).map((t, i) => {
+      const mname = String(t.manager || "").trim();
+      const id = mname ? slug(mname) || mname : null;
+      if (id && !managers.has(id)) managers.set(id, { id, name: mname });
+      return {
+        teamId: i + 1, name: t.name || `Team ${i + 1}`, ownerNames: [mname], managerId: id,
+        wins: +t.wins || 0, losses: +t.losses || 0, ties: +t.ties || 0, pf: +t.pf || 0, pa: +t.pa || 0,
+        finalRank: i === d.champIdx ? 1 : i === d.runnerIdx ? 2 : null, playoffSeed: null,
+      };
+    });
+    const byName = new Map(teams.map((t) => [norm(t.name), t]));
+    const matchups = [];
+    for (const g of (gdocs.get(d.year)?.games || [])) {
+      const h = byName.get(norm(g.home)), a = byName.get(norm(g.away));
+      if (!h || !a || h === a) { unmatched++; continue; }
+      matchups.push({ week: +g.week, type: g.type || "regular",
+        home: { teamId: h.teamId, score: +g.homeScore, managerId: h.managerId },
+        away: { teamId: a.teamId, score: +g.awayScore, managerId: a.managerId } });
+    }
+    const champ = d.champIdx >= 0 && teams[d.champIdx] ? d.champIdx + 1 : null;
+    return { year: d.year, platform: "manual", leagueName: d.leagueName || null, status: "complete",
+      championTeamId: champ, championManagerId: champ ? teams[d.champIdx].managerId : null, teams, matchups };
+  });
+  return { sample: false, managers: [...managers.values()], seasons, unmatched };
+}
+
+function refresh() {
+  ctx = prepare(rows.length ? toHistory(rows, gameDocs) : SAMPLE);
+  const years = seasonYears(ctx);
+  if (!years.includes(params.year)) params.year = years[0];
+}
+
+/* ---------- Add data page ---------- */
+const input = (i, f, v, w = "") => `<input data-i="${i}" data-f="${f}" value="${esc(v)}" ${w}>`;
+
+function dataView() {
+  if (!unlocked) return unlockCard("Add or edit seasons");
+  const note = storageNote ? `<div class="banner">${esc(storageNote)}</div>` : "";
+  const list = [...rows].sort((a, b) => b.year - a.year).map((d) => `
+    <tr><td><strong>${esc(d.year)}</strong></td><td>${(d.teams || []).length} teams</td>
+    <td class="actions">
+      <button class="btn" data-act="edit" data-year="${esc(d.year)}">Edit</button>
+      <button class="btn danger" data-act="del" data-year="${esc(d.year)}">${confirmDel === d.year ? "Click again to delete" : "Delete"}</button>
+    </td></tr>`).join("");
+  const saved = rows.length
+    ? section("Saved seasons", `<div class="table-wrap"><table><tbody>${list}</tbody></table></div>`)
+    : section("Saved seasons", `<p class="muted">Nothing saved yet. The other tabs are showing sample data until you add your first season.</p>`);
+
+  const backup = section("Backup", `<p class="note">Download everything as a file, or restore from one. Restoring overwrites any season that has the same year.</p>
+    <div class="row"><button class="btn" data-act="export">Download backup</button>
+    ${db && canWrite !== false ? `<label class="btn">Restore from file<input type="file" id="restore" accept="application/json,.json" hidden></label>` : ""}</div>`);
+
+  if (canWrite === false || !db) {
+    return note + saved + backup + section("Add a season", `<p class="muted">${db ? "You have view-only access, so you can’t add seasons." : "Saving isn’t available in this view. Open the page from your Claude artifacts to add data."}</p>`);
+  }
+
+  const teamRows = draft.teams.map((t, i) => `
+    <tr>
+      <td class="muted">${i + 1}</td>
+      <td>${input(i, "name", t.name, 'placeholder="Team name" class="w-team"')}</td>
+      <td>${input(i, "manager", t.manager, 'placeholder="Manager" class="w-mgr"')}</td>
+      <td>${input(i, "wins", t.wins, 'inputmode="decimal" class="w-num"')}</td>
+      <td>${input(i, "losses", t.losses, 'inputmode="decimal" class="w-num"')}</td>
+      <td>${input(i, "ties", t.ties, 'inputmode="decimal" class="w-num"')}</td>
+      <td>${input(i, "pf", t.pf, 'inputmode="decimal" class="w-pts"')}</td>
+      <td>${input(i, "pa", t.pa, 'inputmode="decimal" class="w-pts"')}</td>
+      <td class="center"><input type="radio" name="champ" data-act="champ" data-i="${i}" ${draft.champIdx === i ? "checked" : ""}></td>
+      <td class="center"><input type="radio" name="runner" data-act="runner" data-i="${i}" ${draft.runnerIdx === i ? "checked" : ""}></td>
+      <td><button class="btn small" data-act="delrow" data-i="${i}" title="Remove row">&times;</button></td>
+    </tr>`).join("");
+
+  const fileNote = pendingFiles.length ? `<span class="muted">${pendingFiles.length} screenshot${pendingFiles.length > 1 ? "s" : ""} chosen</span>` : "";
+  const filePicker = imageLimit
+    ? `<label class="btn">Choose screenshot<input type="file" id="shots" accept="image/*" multiple hidden></label> ${fileNote}` : "";
+  const autofill = sampleNs ? `
+    <div class="autofill">
+      <h3>Quick fill (optional)</h3>
+      <p class="note">Paste the standings page text${imageLimit ? " or choose a screenshot of it" : ""}, then let Claude fill in the form. Check the numbers before saving.</p>
+      <textarea data-f="text" rows="4" placeholder="Paste standings here...">${esc(draft.text)}</textarea>
+      <div class="row">${filePicker}<button class="btn primary" data-act="fill" ${busy ? "disabled" : ""}>${busy ? "Reading..." : "Fill the form"}</button></div>
+    </div>` : "";
+
+  const form = section("Add or edit a season", `
+    ${autofill}
+    <label class="inline">Season year <input data-f="year" value="${esc(draft.year)}" inputmode="numeric" class="w-year" placeholder="2019"></label>
+    <div class="table-wrap"><table class="entry">
+      <thead><tr><th>#</th><th>Team</th><th>Manager</th><th>W</th><th>L</th><th>T</th><th>PF</th><th>PA</th><th>Champ</th><th>2nd</th><th></th></tr></thead>
+      <tbody>${teamRows}</tbody>
+    </table></div>
+    <div class="row">
+      <button class="btn" data-act="addrow">Add team row</button>
+      <button class="btn primary" data-act="save">Save season</button>
+      <button class="btn" data-act="clear">Clear form</button>
+    </div>
+    <p class="note">Use the same manager name every year so their titles and records combine. Leave the champion blank if the season isn’t finished.</p>`);
+
+  return `${note}${status ? `<div class="banner">${esc(status)}</div>` : ""}${form}${saved}${backup}`;
+}
+
+/* ---------- Add scores page ---------- */
+function unlockCard(title) {
+  return `${status ? `<div class="banner">${esc(status)}</div>` : ""}` + section(title, `<p class="muted">Enter the editor PIN to add or change data.</p>
+    <div class="row"><input id="pin" type="password" inputmode="numeric" placeholder="PIN" class="w-year"><button class="btn primary" data-act="unlock">Unlock</button></div>`);
+}
+
+function saveErr(e) {
+  if (e && e.code === "quota_exceeded") return "The database is full.";
+  if (e && e.code === "permission-denied") return "Firebase blocked the save. Check your Firestore rules.";
+  return "Couldn’t save that. If you only have view access, ask the owner to add the data.";
+}
+
+async function exportAll() {
+  const payload = JSON.stringify({ app: "league-history", version: 1, exportedAt: new Date().toISOString(),
+    seasons: [...rows].sort((a, b) => a.year - b.year), games: [...gameDocs.values()] }, null, 2);
+  const name = `league-history-${new Date().toISOString().slice(0, 10)}.json`;
+  try {
+    const dl = await use("downloads");
+    if (dl) await dl.save({ filename: name, data: payload });
+    else {
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([payload], { type: "application/json" }));
+      a.download = name;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    }
+    say("Backup ready.");
+  } catch (e) {
+    say(e && e.code === "declined" ? "Download cancelled." : "Couldn’t create the download.");
+  }
+}
+
+async function restoreFrom(file) {
+  try {
+    const data = JSON.parse(await file.text());
+    const seasons = Array.isArray(data.seasons) ? data.seasons : [];
+    const games = Array.isArray(data.games) ? data.games : [];
+    if (!seasons.length && !games.length) return say("That file doesn’t look like a league backup.");
+    busy = true; render();
+    for (const s of seasons) if (Number.isInteger(s.year)) await db.collection("seasons").doc(String(s.year)).set(s);
+    for (const g of games) if (Number.isInteger(g.year)) await db.collection("games").doc(String(g.year)).set(g);
+    busy = false;
+    say(`Restored ${seasons.length} season${seasons.length === 1 ? "" : "s"} and ${games.length} set${games.length === 1 ? "" : "s"} of scores.`);
+  } catch (e) {
+    busy = false;
+    say(e && e.code ? saveErr(e) : "Couldn’t read that file.");
+  }
+}
+
+function sortGames(list) { return [...list].sort((a, b) => (Number(a.week) || 0) - (Number(b.week) || 0)); }
+
+function loadGames(year) {
+  const saved = gameDocs.get(year)?.games || [];
+  const t = (v) => (v === undefined || v === null ? "" : String(v));
+  gdraft = { year: String(year), text: "", weekHint: "",
+    games: sortGames(saved.map((g) => ({ week: t(g.week), type: g.type || "regular", home: t(g.home), homeScore: t(g.homeScore), away: t(g.away), awayScore: t(g.awayScore) }))) };
+  gFiles = [];
+}
+
+function scoresView() {
+  if (!unlocked) return unlockCard("Add or edit weekly scores");
+  const years = rows.map((d) => d.year).sort((a, b) => b - a);
+  if (!years.length) return section("Weekly scores", `<p class="muted">Save a season’s standings first, on the Add data tab. Scores are matched to the team names saved there.</p>`);
+  const summary = section("Saved scores", table(["Season", "Games saved"],
+    years.map((y) => { const n = (gameDocs.get(y)?.games || []).length; return [`<strong>${y}</strong>`, n ? String(n) : `<span class="muted">none yet</span>`]; })));
+  if (canWrite === false || !db) {
+    return summary + section("Add weekly scores", `<p class="muted">${db ? "You have view-only access, so you can’t add scores." : "Saving isn’t available in this view."}</p>`);
+  }
+  if (!years.includes(Number(gdraft.year))) loadGames(years[0]);
+  const y = Number(gdraft.year);
+  const names = (rows.find((r) => r.year === y)?.teams || []).map((t) => t.name);
+  const flag = (n) => (String(n).trim() && !matchTeam(n, names) ? " bad" : "");
+  const typeOpts = (cur) => ["regular", "playoff", "consolation"].map((o) => `<option value="${o}"${o === cur ? " selected" : ""}>${o}</option>`).join("");
+  const gi = (i, f, v, cls, extra = "") => `<input data-g="${f}" data-i="${i}" value="${esc(v)}" class="${cls}" ${extra}>`;
+
+  const body = gdraft.games.map((g, i) => `
+    <tr>
+      <td>${gi(i, "week", g.week, "w-week", 'inputmode="numeric"')}</td>
+      <td><select data-g="type" data-i="${i}">${typeOpts(g.type)}</select></td>
+      <td>${gi(i, "home", g.home, "w-team" + flag(g.home), 'list="gteams"')}</td>
+      <td>${gi(i, "homeScore", g.homeScore, "w-score", 'inputmode="decimal"')}</td>
+      <td>${gi(i, "away", g.away, "w-team" + flag(g.away), 'list="gteams"')}</td>
+      <td>${gi(i, "awayScore", g.awayScore, "w-score", 'inputmode="decimal"')}</td>
+      <td><button class="btn small" data-act="gdelrow" data-i="${i}" title="Remove game">&times;</button></td>
+    </tr>`).join("");
+
+  const fileNote = gFiles.length ? `<span class="muted">${gFiles.length} screenshot${gFiles.length > 1 ? "s" : ""} chosen</span>` : "";
+  const filePicker = imageLimit ? `<label class="btn">Choose screenshot<input type="file" id="gshots" accept="image/*" multiple hidden></label> ${fileNote}` : "";
+  const autofill = sampleNs ? `
+    <div class="autofill">
+      <h3>Quick fill (optional)</h3>
+      <p class="note">Paste a scoreboard page${imageLimit ? " or choose screenshots" : ""}, one or several weeks at a time. Re-importing a week replaces that week.</p>
+      <textarea data-gf="text" rows="4" placeholder="Paste scores here...">${esc(gdraft.text)}</textarea>
+      <div class="row">
+        <label class="inline" style="margin:0">Week, if not shown <input data-gf="weekHint" class="w-week" value="${esc(gdraft.weekHint)}" inputmode="numeric"></label>
+        ${filePicker}
+        <button class="btn primary" data-act="gfill" ${busy ? "disabled" : ""}>${busy ? "Reading..." : "Fill the scores"}</button>
+      </div>
+    </div>` : "";
+
+  const warn = ctx.data.unmatched ? `<div class="banner">${ctx.data.unmatched} saved game${ctx.data.unmatched > 1 ? "s don’t" : " doesn’t"} match a team name in the standings (a team may have been renamed), so ${ctx.data.unmatched > 1 ? "they’re" : "it’s"} left out of the stats.</div>` : "";
+  const hasSaved = (gameDocs.get(y)?.games || []).length > 0;
+
+  const form = section("Add or edit weekly scores", `
+    <label class="inline">Season <select id="g-year">${years.map((v) => `<option value="${v}"${v === y ? " selected" : ""}>${v}</option>`).join("")}</select></label>
+    ${autofill}
+    <datalist id="gteams">${names.map((n) => `<option value="${esc(n)}">`).join("")}</datalist>
+    <div class="table-wrap"><table class="entry">
+      <thead><tr><th>Week</th><th>Type</th><th>Team</th><th>Score</th><th>Team</th><th>Score</th><th></th></tr></thead>
+      <tbody>${body || `<tr><td colspan="7" class="muted">No games yet. Use Quick fill or add rows.</td></tr>`}</tbody>
+    </table></div>
+    <div class="row">
+      <button class="btn" data-act="gaddrow">Add game row</button>
+      <button class="btn primary" data-act="gsave" ${busy ? "disabled" : ""}>Save scores for ${y}</button>
+      ${hasSaved ? `<button class="btn danger" data-act="gdelall">${confirmDelGames === y ? "Click again to delete all" : `Delete all ${y} scores`}</button>` : ""}
+    </div>
+    <p class="note">Which team is listed first doesn’t matter. Team names must match the standings for that season; rows with a name that doesn’t match turn red. Mark playoff and consolation games with Type so records stay accurate.</p>`);
+
+  return `${status ? `<div class="banner">${esc(status)}</div>` : ""}${warn}${form}${summary}`;
+}
+
+/* ---------- pages ---------- */
+const pages = {
+  champions: ["Champions", (c) => championsView(c)],
+  standings: ["Standings", (c, p) => standingsView(c, p.year)],
+  alltime: ["All-time", (c) => allTimeView(c)],
+  h2h: ["Head-to-head", (c, p) => h2hView(c, p.a, p.b)],
+  records: ["Records", (c) => recordsView(c)],
+  managers: ["Managers", (c) => managersView(c)],
+  data: ["Add data", () => dataView()],
+  scores: ["Add scores", () => scoresView()],
+};
+
+function render() {
+  const key = pages[location.hash.slice(1)] ? location.hash.slice(1) : "champions";
+  document.querySelector("#nav").innerHTML = Object.entries(pages)
+    .map(([k, [label]]) => `<a href="#${k}"${k === key ? ' class="active"' : ""}>${label}</a>`).join("");
+  const banner = ctx.data.sample && key !== "data"
+    ? `<div class="banner">Showing <strong>sample data</strong>. Open <a href="#data">Add data</a> to enter your league’s real history.</div>` : "";
+  document.querySelector("#view").innerHTML = banner + pages[key][1](ctx, params);
+  const name = ctx.data.seasons.at(-1)?.leagueName;
+  document.querySelector("#league-name").textContent = name || "League History";
+  document.title = `${pages[key][0]} | League History`;
+}
+
+/* ---------- actions ---------- */
+function say(msg) { status = msg; render(); }
+
+function applyParsed(r) {
+  const teams = Array.isArray(r?.teams) ? r.teams : [];
+  if (!teams.length) return say("I couldn’t find any teams in that. Try pasting more of the page.");
+  const s = (v) => (v === null || v === undefined ? "" : String(v));
+  draft.teams = teams.map((t) => ({ name: s(t.name), manager: s(t.manager), wins: s(t.wins), losses: s(t.losses), ties: s(t.ties), pf: s(t.pf), pa: s(t.pa) }));
+  if (r.year) draft.year = s(r.year);
+  draft.champIdx = teams.findIndex((t) => r.champion && t.name === r.champion);
+  draft.runnerIdx = teams.findIndex((t) => r.runnerUp && t.name === r.runnerUp);
+  draft.text = "";
+  pendingFiles = [];
+  say("Filled in. Check the numbers, add any missing manager names, then Save season.");
+}
+
+async function fill() {
+  const text = draft.text.trim();
+  if (!text && !pendingFiles.length) return say("Paste some text or choose a screenshot first.");
+  busy = true; status = ""; render();
+  const prompt = `Extract final fantasy football league standings from the text and/or screenshots provided. Reply with only a JSON object shaped like {"year": 2019, "teams": [{"name": "Team name", "manager": "Owner name or empty string", "wins": 0, "losses": 0, "ties": 0, "pf": 0, "pa": 0}], "champion": "team name or null", "runnerUp": "team name or null"}. One entry per team, in the order shown. Use 0 for a missing number and an empty string if the manager isn’t shown. Never invent data.${text ? "\n\nText:\n" + text : ""}`;
+  const opts = { modelTier: "default" };
+  if (pendingFiles.length && imageLimit) opts.images = pendingFiles.slice(0, imageLimit.maxCount || 4);
+  try {
+    const result = await sampleNs.json(prompt, opts);
+    busy = false;
+    applyParsed(result);
+  } catch (e) {
+    busy = false;
+    say(e && e.code === "not_granted" ? "Quick fill needs your permission to ask Claude. You can still type the numbers in."
+      : "That didn’t work this time. You can try again or type the numbers in.");
+  }
+}
+
+async function save() {
+  const year = Number(draft.year);
+  if (!Number.isInteger(year) || year < 1990 || year > 2100) return say("Enter the season year, like 2019.");
+  const kept = [];
+  draft.teams.forEach((t, i) => { if (t.name.trim() || t.manager.trim()) kept.push({ t, i }); });
+  if (kept.length < 2) return say("Add at least two teams.");
+  if (kept.some(({ t }) => !t.name.trim())) return say("Every row with a manager needs a team name too.");
+  if (kept.some(({ t }) => !t.manager.trim())) return say("Every team needs a manager name so records can combine across seasons.");
+  const num = (v) => { const n = parseFloat(String(v).replace(/,/g, "")); return Number.isFinite(n) ? n : 0; };
+  const doc = {
+    year, platform: "manual", savedAt: new Date().toISOString(),
+    teams: kept.map(({ t }) => ({ name: t.name.trim(), manager: t.manager.trim(), wins: num(t.wins), losses: num(t.losses), ties: num(t.ties), pf: num(t.pf), pa: num(t.pa) })),
+    champIdx: kept.findIndex(({ i }) => i === draft.champIdx),
+    runnerIdx: kept.findIndex(({ i }) => i === draft.runnerIdx),
+  };
+  busy = true; render();
+  try {
+    await db.collection("seasons").doc(String(year)).set(doc);
+    draft = newDraft();
+    busy = false;
+    say(`Saved ${year}.`);
+  } catch (e) {
+    busy = false;
+    if (e && e.code === "invalid_argument") canWrite = false;
+    say(saveErr(e));
+  }
+}
+
+async function remove(year) {
+  if (confirmDel !== year) { confirmDel = year; return render(); }
+  confirmDel = null;
+  try { await db.collection("seasons").doc(String(year)).delete(); await db.collection("games").doc(String(year)).delete(); say(`Deleted ${year}.`); }
+  catch { say("Couldn’t delete that season."); }
+}
+
+async function fillGames() {
+  const year = Number(gdraft.year);
+  const names = (rows.find((r) => r.year === year)?.teams || []).map((t) => t.name);
+  const text = gdraft.text.trim();
+  if (!text && !gFiles.length) return say("Paste some text or choose a screenshot first.");
+  busy = true; status = ""; render();
+  const hint = String(gdraft.weekHint).trim();
+  const prompt = `Extract fantasy football weekly matchup scores from the text and/or screenshots provided. Reply with only a JSON array like [{"week": 1, "type": "regular", "home": "Team name", "homeScore": 101.5, "away": "Team name", "awayScore": 98.2}]. type is "regular", "playoff" (championship bracket) or "consolation". ${hint ? `If a week isn’t shown, use week ${hint}.` : "Use the week shown."} Use the closest matching name from this list of teams: ${names.join(" | ")}. Never invent scores.${text ? "\n\nText:\n" + text : ""}`;
+  const opts = { modelTier: "default" };
+  if (gFiles.length && imageLimit) opts.images = gFiles.slice(0, imageLimit.maxCount || 4);
+  try {
+    const res = await sampleNs.json(prompt, opts);
+    busy = false;
+    applyGames(res, names);
+  } catch (e) {
+    busy = false;
+    say(e && e.code === "not_granted" ? "Quick fill needs your permission to ask Claude. You can still type the scores in."
+      : "That didn’t work this time. You can try again or type the scores in.");
+  }
+}
+
+function applyGames(res, names) {
+  const list = Array.isArray(res) ? res : Array.isArray(res?.games) ? res.games : [];
+  if (!list.length) return say("I couldn’t find any games in that. Try including the week heading.");
+  const s = (v) => (v === null || v === undefined ? "" : String(v));
+  const types = ["regular", "playoff", "consolation"];
+  const parsed = list.map((g) => ({
+    week: s(g.week ?? gdraft.weekHint), type: types.includes(g.type) ? g.type : "regular",
+    home: matchTeam(g.home, names) || s(g.home), homeScore: s(g.homeScore),
+    away: matchTeam(g.away, names) || s(g.away), awayScore: s(g.awayScore),
+  }));
+  const weeks = new Set(parsed.map((g) => Number(g.week)));
+  gdraft.games = sortGames(gdraft.games.filter((g) => !weeks.has(Number(g.week))).concat(parsed));
+  gdraft.text = ""; gFiles = [];
+  say(`Added ${parsed.length} games. Check them, fix any red team names, then Save scores.`);
+}
+
+async function saveGames() {
+  const year = Number(gdraft.year);
+  const season = rows.find((r) => r.year === year);
+  if (!season) return say("Pick a season first.");
+  const names = (season.teams || []).map((t) => t.name);
+  const kept = gdraft.games.filter((g) => [g.home, g.away, g.homeScore, g.awayScore].some((v) => String(v).trim()));
+  if (!kept.length) return say("There are no games to save.");
+  const out = [], bad = [];
+  for (const g of kept) {
+    const home = matchTeam(g.home, names), away = matchTeam(g.away, names);
+    if (!home || !away) { bad.push((!home ? g.home : g.away) || "(blank)"); continue; }
+    const week = Number(g.week), hs = parseFloat(g.homeScore), as2 = parseFloat(g.awayScore);
+    if (home === away) return say(`Week ${g.week}: a team can’t play itself (${home}).`);
+    if (!Number.isInteger(week) || week < 1 || week > 25) return say(`“${g.week}” isn’t a valid week number.`);
+    if (!Number.isFinite(hs) || !Number.isFinite(as2)) return say(`Week ${week}: ${home} vs ${away} is missing a score.`);
+    out.push({ week, type: ["regular", "playoff", "consolation"].includes(g.type) ? g.type : "regular", home, homeScore: hs, away, awayScore: as2 });
+  }
+  if (bad.length) return say(`These names don’t match a ${year} team: ${[...new Set(bad)].join(", ")}. Fix the red rows.`);
+  busy = true; render();
+  try {
+    await db.collection("games").doc(String(year)).set({ year, games: out, savedAt: new Date().toISOString() });
+    busy = false;
+    loadGames(year);
+    say(`Saved ${out.length} games for ${year}.`);
+  } catch (e) {
+    busy = false;
+    if (e && e.code === "invalid_argument") canWrite = false;
+    say(saveErr(e));
+  }
+}
+
+async function removeGames(year) {
+  if (confirmDelGames !== year) { confirmDelGames = year; return render(); }
+  confirmDelGames = null;
+  try { await db.collection("games").doc(String(year)).delete(); loadGames(year); say(`Deleted all ${year} scores.`); }
+  catch { say("Couldn’t delete those scores."); }
+}
+
+document.addEventListener("input", (e) => {
+  const gk = e.target.dataset && e.target.dataset.g;
+  if (gk) { gdraft.games[Number(e.target.dataset.i)][gk] = e.target.value; return; }
+  const gf = e.target.dataset && e.target.dataset.gf;
+  if (gf) { gdraft[gf] = e.target.value; return; }
+  const f = e.target.dataset && e.target.dataset.f;
+  if (!f) return;
+  if (e.target.dataset.i !== undefined) draft.teams[Number(e.target.dataset.i)][f] = e.target.value;
+  else draft[f] = e.target.value;
+});
+
+document.addEventListener("change", (e) => {
+  const t = e.target;
+  if (t.id === "year-select") { params.year = Number(t.value); return render(); }
+  if (t.id === "h2h-a") { params.a = t.value; return render(); }
+  if (t.id === "h2h-b") { params.b = t.value; return render(); }
+  if (t.id === "restore") { const f = t.files[0]; if (f) restoreFrom(f); t.value = ""; return; }
+  if (t.id === "g-year") { loadGames(Number(t.value)); return render(); }
+  if (t.id === "gshots") { gFiles = [...t.files]; return render(); }
+  if (t.id === "shots") { pendingFiles = [...t.files]; return render(); }
+  if (t.dataset && t.dataset.act === "champ") draft.champIdx = Number(t.dataset.i);
+  if (t.dataset && t.dataset.act === "runner") draft.runnerIdx = Number(t.dataset.i);
+});
+
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-act]");
+  if (!b) return;
+  const act = b.dataset.act;
+  if (act === "addrow") { draft.teams.push(blankTeam()); render(); }
+  else if (act === "delrow") {
+    const i = Number(b.dataset.i);
+    draft.teams.splice(i, 1);
+    if (draft.champIdx === i) draft.champIdx = -1; else if (draft.champIdx > i) draft.champIdx--;
+    if (draft.runnerIdx === i) draft.runnerIdx = -1; else if (draft.runnerIdx > i) draft.runnerIdx--;
+    render();
+  }
+  else if (act === "clear") { draft = newDraft(); pendingFiles = []; status = ""; render(); }
+  else if (act === "gaddrow") {
+    const last = gdraft.games[gdraft.games.length - 1];
+    gdraft.games.push({ week: last ? last.week : "1", type: last ? last.type : "regular", home: "", homeScore: "", away: "", awayScore: "" });
+    render();
+  }
+  else if (act === "gdelrow") { gdraft.games.splice(Number(b.dataset.i), 1); render(); }
+  else if (act === "gfill") fillGames();
+  else if (act === "gsave") saveGames();
+  else if (act === "gdelall") removeGames(Number(gdraft.year));
+  else if (act === "export") exportAll();
+  else if (act === "unlock") {
+    const pin = document.querySelector("#pin");
+    if (pin && pin.value === EDIT_PIN) { unlocked = true; try { localStorage.setItem("fh-unlocked", EDIT_PIN); } catch {} say(""); }
+    else say("That PIN isn’t right.");
+  }
+  else if (act === "save") save();
+  else if (act === "fill") fill();
+  else if (act === "del") remove(Number(b.dataset.year));
+  else if (act === "edit") {
+    const d = rows.find((r) => r.year === Number(b.dataset.year));
+    if (!d) return;
+    const s = (v) => (v === 0 ? "0" : String(v ?? ""));
+    draft = { year: s(d.year), text: "", champIdx: d.champIdx ?? -1, runnerIdx: d.runnerIdx ?? -1,
+      teams: (d.teams || []).map((t) => ({ name: t.name, manager: t.manager, wins: s(t.wins), losses: s(t.losses), ties: s(t.ties), pf: s(t.pf), pa: s(t.pa) })) };
+    status = `Editing ${d.year}. Save season to overwrite it.`;
+    render();
+    window.scrollTo({ top: 0 });
+  }
+});
+window.addEventListener("hashchange", () => { status = ""; confirmDel = null; confirmDelGames = null; render(); });
+
+/* ---------- start ---------- */
+refresh();
+render();
+
+// Subscribes to the saved seasons and scores. Called once by the boot code for each build.
+function startData() {
+  const onErr = (e) => {
+    if (e && e.code === "permission-denied") storageNote = "Firebase blocked access. Check your Firestore rules.";
+    render();
+  };
+  db.collection("seasons").onSnapshot(
+    (snap) => { rows = snap.docs.map((d) => d.data()).filter((d) => d && Number.isInteger(d.year)); refresh(); render(); },
+    onErr
+  );
+  db.collection("games").onSnapshot(
+    (snap) => {
+      gameDocs = new Map(snap.docs.map((d) => d.data()).filter((d) => d && Number.isInteger(d.year)).map((d) => [d.year, d]));
+      refresh(); render();
+    },
+    onErr
+  );
+}
+
+
+// Boot for the GitHub Pages version: data lives in Firebase (or on this device if Firebase isn't set up).
+function localDb() {
+  const mem = {}, subs = {};
+  const load = (c) => { try { return JSON.parse(localStorage.getItem("fh:" + c) || "{}"); } catch { return mem[c] || {}; } };
+  const save = (c, obj) => { mem[c] = obj; try { localStorage.setItem("fh:" + c, JSON.stringify(obj)); } catch {} };
+  const emit = (c) => (subs[c] || []).forEach((f) => f({ docs: Object.values(load(c)).map((d) => ({ data: () => d })) }));
+  return { collection: (c) => ({
+    onSnapshot: (next) => { (subs[c] = subs[c] || []).push(next); setTimeout(() => emit(c), 0); return () => {}; },
+    doc: (id) => ({
+      set: async (d) => { const o = load(c); o[id] = JSON.parse(JSON.stringify(d)); save(c, o); emit(c); },
+      delete: async () => { const o = load(c); delete o[id]; save(c, o); emit(c); },
+    }),
+  }) };
+}
+
+(async () => {
+  const cfg = CONFIG.firebase;
+  if (cfg && cfg.apiKey) {
+    try {
+      const V = "10.12.2";
+      const appMod = await import(`https://www.gstatic.com/firebasejs/${V}/firebase-app.js`);
+      const fs = await import(`https://www.gstatic.com/firebasejs/${V}/firebase-firestore.js`);
+      const fb = fs.getFirestore(appMod.initializeApp(cfg, "league-history"));
+      // Stored in collections fhSeasons and fhGames so they never mix with other apps in the same project.
+      db = { collection: (name) => {
+        const col = "fh" + name[0].toUpperCase() + name.slice(1);
+        return {
+          onSnapshot: (next, err) => fs.onSnapshot(fs.collection(fb, col), (snap) => next({ docs: snap.docs.map((d) => ({ data: () => d.data() })) }), err),
+          doc: (id) => ({ set: (data) => fs.setDoc(fs.doc(fb, col, id), data), delete: () => fs.deleteDoc(fs.doc(fb, col, id)) }),
+        };
+      } };
+    } catch (e) {
+      storageNote = "Couldn’t connect to Firebase, so data is saving on this device only.";
+    }
+  } else {
+    storageNote = "No Firebase settings yet, so data is saving on this device only. Add them at the top of this file to share it with your league.";
+  }
+  if (!db) db = localDb();
+  startData();
+  render();
+})();
+
+</script>
+</body>
+</html>
