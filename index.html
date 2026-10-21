@@ -176,10 +176,13 @@ h1.brand .tag { font-size: 15px; line-height: 1.2; }
 .done { font-size: 11px; border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; margin-left: 4px; }
 .hb-order td:first-child { text-align: center; width: 54px; }
 
-/* phone menu */
-.topbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+/* phone menu: a dropdown that opens straight down from the header */
+.topbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; position: relative; z-index: 2; }
 .menu-btn { display: none; flex-direction: column; justify-content: center; gap: 5px; width: 44px; height: 44px; padding: 0 11px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); cursor: pointer; flex: none; }
-.menu-btn span { display: block; height: 2px; border-radius: 2px; background: var(--text); }
+.menu-btn span { display: block; height: 2px; border-radius: 2px; background: var(--text); transition: transform .2s ease, opacity .2s ease; }
+.menu-btn[aria-expanded="true"] span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+.menu-btn[aria-expanded="true"] span:nth-child(2) { opacity: 0; }
+.menu-btn[aria-expanded="true"] span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
 .drawer { display: none; }
 @media (max-width: 720px) {
   header { padding: 8px 14px 8px; }
@@ -189,23 +192,18 @@ h1.brand .tag { font-size: 15px; line-height: 1.2; }
   h1.brand .logo { height: 44px; }
   h1.brand .tag { font-size: 12px; letter-spacing: .04em; }
   main { padding: 12px; }
-  .drawer { display: block; position: fixed; inset: 0; z-index: 50; visibility: hidden; transition: visibility 0s linear .25s; }
+  .drawer { display: block; position: absolute; top: calc(100% + 3px); left: 0; right: 0; z-index: 1; visibility: hidden; transition: visibility 0s linear .25s; }
   .drawer.open { visibility: visible; transition-delay: 0s; }
-  .drawer-backdrop { position: absolute; inset: 0; width: 100%; border: 0; padding: 0; background: rgba(0, 0, 0, .5); opacity: 0; transition: opacity .25s; cursor: pointer; }
+  .drawer-backdrop { position: absolute; top: 0; left: 0; right: 0; height: 100vh; width: 100%; border: 0; padding: 0; background: rgba(10, 19, 48, .45); opacity: 0; transition: opacity .25s ease; cursor: pointer; }
   .drawer.open .drawer-backdrop { opacity: 1; }
-  .drawer-panel { position: absolute; top: 0; right: 0; bottom: 0; width: min(82vw, 320px); background: var(--card); border-left: 1px solid var(--line); box-shadow: -8px 0 24px rgba(0, 0, 0, .25);
-    display: flex; flex-direction: column; transform: translateX(100%); transition: transform .25s ease; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
-  .drawer.open .drawer-panel { transform: none; }
-  .drawer-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--line); }
-  .drawer-head img { height: 48px; width: auto; }
-  .drawer-close { font: inherit; font-size: 26px; line-height: 1; width: 44px; height: 44px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--text); cursor: pointer; }
-  .drawer-links { overflow-y: auto; flex: 1; }
+  .drawer-links { position: relative; display: block; background: var(--card); border-bottom: 3px solid var(--gold); box-shadow: 0 14px 24px rgba(0, 0, 0, .2); max-height: 0; overflow: hidden; transition: max-height .25s ease; }
+  .drawer.open .drawer-links { max-height: calc(100vh - 90px); overflow-y: auto; }
   .drawer-links a { display: block; padding: 15px 20px; font-size: 17px; color: var(--text); text-decoration: none; border-bottom: 1px solid var(--line); border-left: 4px solid transparent; }
-  .drawer-links a.active { background: var(--accent-soft); border-left-color: var(--accent); color: var(--accent); font-weight: 700; }
-  .drawer-foot { padding: 12px 20px; font-size: 12px; color: var(--muted); border-top: 1px solid var(--line); }
+  .drawer-links a:last-child { border-bottom: 0; }
+  .drawer-links a.active { background: var(--accent-soft); border-left-color: var(--gold); color: var(--accent); font-weight: 700; }
   body.menu-open { overflow: hidden; }
 }
-@media (prefers-reduced-motion: reduce) { .drawer-panel, .drawer-backdrop { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .drawer-links, .drawer-backdrop, .menu-btn span { transition: none; } }
 
 /* theme: white, blue and gold */
 header { border-bottom: 3px solid var(--gold); }
@@ -236,15 +234,11 @@ html { scroll-padding-top: env(safe-area-inset-top, 0px); }
     <button id="menu-btn" class="menu-btn" data-act="menu-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="drawer"><span></span><span></span><span></span></button>
   </div>
   <nav id="nav"></nav>
-</header>
-<div id="drawer" class="drawer">
-  <button class="drawer-backdrop" data-act="menu-close" aria-label="Close menu" tabindex="-1"></button>
-  <aside class="drawer-panel" aria-label="Menu">
-    <div class="drawer-head"><img src="logo.png" alt="Ronnie Bass Fantasy Football"><button class="drawer-close" data-act="menu-close" aria-label="Close menu">&times;</button></div>
+  <div id="drawer" class="drawer">
+    <button class="drawer-backdrop" data-act="menu-close" aria-label="Close menu" tabindex="-1"></button>
     <nav id="drawer-links" class="drawer-links" aria-label="Sections"></nav>
-    <div class="drawer-foot">The Ronnie Bass Fantasy Football League</div>
-  </aside>
-</div>
+  </div>
+</header>
 <main id="view"><p class="muted">Loading...</p></main>
 <footer>Fantasy football league history</footer>
 <script>
@@ -1533,7 +1527,7 @@ function setMenu(open) {
   drawer.classList.toggle("open", open);
   document.body.classList.toggle("menu-open", open);
   if (btn) { btn.setAttribute("aria-expanded", String(open)); btn.setAttribute("aria-label", open ? "Close menu" : "Open menu"); }
-  if (open) { const x = drawer.querySelector(".drawer-close"); if (x) x.focus(); } else if (btn && document.activeElement && drawer.contains(document.activeElement)) btn.focus();
+  if (!open && btn && document.activeElement && drawer.contains(document.activeElement)) btn.focus();
 }
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") setMenu(false); });
 window.addEventListener("hashchange", () => { status = ""; confirmDel = null; confirmDelGames = null; setMenu(false); render(); });
