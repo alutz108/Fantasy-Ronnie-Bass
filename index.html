@@ -230,6 +230,32 @@ th.sortable::after { content: "\2195"; margin-left: 5px; font-size: 11px; opacit
 th.sortable[aria-sort="ascending"]::after { content: "\25B2"; opacity: 1; color: var(--gold); }
 th.sortable[aria-sort="descending"]::after { content: "\25BC"; opacity: 1; color: var(--gold); }
 
+/* managers page */
+.mgr-head .hb-head { margin-bottom: 4px; }
+.mgr-head label.inline { margin: 0; }
+.cards.mgr-grid { grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 14px; margin-bottom: 16px; }
+.mgr { border-top: 3px solid var(--gold); display: flex; flex-direction: column; gap: 10px; }
+.mgr-top { display: flex; align-items: center; gap: 12px; }
+.avatar { flex: none; width: 46px; height: 46px; border-radius: 50%; background: var(--accent); color: var(--on-accent); border: 2px solid var(--gold); display: grid; place-items: center; font-weight: 800; font-size: 16px; letter-spacing: .02em; }
+.mgr-id { min-width: 0; flex: 1; }
+.mgr-id h3 { margin: 0; font-size: 17px; color: var(--navy); line-height: 1.2; }
+.mgr-id .muted { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mgr-titles { flex: none; text-align: center; min-width: 54px; padding: 4px 8px; border-radius: 10px; background: var(--gold-soft); border: 1px solid var(--gold); }
+.mgr-n { display: block; font-size: 24px; font-weight: 800; line-height: 1; color: var(--navy); }
+.mgr-l { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.mgr-row { display: flex; align-items: baseline; gap: 8px; font-size: 13px; }
+.mgr-k { flex: none; width: 92px; color: var(--muted); }
+.mgr-row > span:last-child { display: flex; flex-wrap: wrap; gap: 4px; }
+.yr { display: inline-block; padding: 1px 8px; border-radius: 99px; font-size: 12px; font-weight: 600; background: var(--even); border: 1px solid var(--line); color: var(--text); }
+.yr.gold { background: var(--gold-soft); border-color: var(--gold); color: var(--navy); }
+.mgr-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(60px, 1fr)); gap: 8px; padding-top: 10px; border-top: 1px solid var(--line); }
+.mgr-stats .k { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.mgr-stats .v { font-size: 15px; font-weight: 700; color: var(--navy); white-space: nowrap; }
+.bar { height: 6px; border-radius: 99px; background: var(--even); overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--gold); border-radius: 99px; }
+.mgr-h2h { align-self: flex-start; font-size: 13px; }
+@media (max-width: 520px) { .cards.mgr-grid { grid-template-columns: 1fr; } }
+
 :root { box-sizing: border-box; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
 html { scroll-padding-top: env(safe-area-inset-top, 0px); }
 
@@ -516,6 +542,25 @@ function h2hPair(ctx, me, opp, filter = "all") {
   return out;
 }
 
+// ---- manager profiles: the all-time numbers plus who is still playing and what to call their team ----
+function managerProfiles(ctx) {
+  const latest = Math.max(...ctx.seasons.map((s) => s.year));
+  const info = new Map();
+  for (const s of ctx.seasons) {
+    for (const t of s.teams) {
+      if (!t.managerId) continue;
+      const i = info.get(t.managerId) || { first: s.year, last: s.year, team: t.name, teamYear: s.year };
+      i.first = Math.min(i.first, s.year); i.last = Math.max(i.last, s.year);
+      if (s.year >= i.teamYear) { i.team = t.name; i.teamYear = s.year; }
+      info.set(t.managerId, i);
+    }
+  }
+  return allTime(ctx).map((r) => {
+    const i = info.get(r.managerId) || { first: 0, last: 0, team: "" };
+    return { ...r, first: i.first, last: i.last, team: i.team, current: i.last === latest, years: i.first === i.last ? String(i.first) : `${i.first}\u2013${i.last}` };
+  });
+}
+
 // Turns stats into HTML. This is the file to edit when you want to change how a page is laid out.
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -667,20 +712,47 @@ function recordsView(ctx) {
   </div>`;
 }
 
-function managersView(ctx) {
+const MGR_SORTS = [["titles", "Most titles"], ["pct", "Best win %"], ["seasons", "Most seasons"], ["name", "Name A to Z"]];
+const initials = (name) => (String(name).split(/\s+/).map((w) => w[0]).join("").replace(/[^A-Za-z0-9]/g, "").slice(0, 2).toUpperCase() || "?");
+const sortManagers = (rows, how) => [...rows].sort((a, b) =>
+  how === "name" ? a.name.localeCompare(b.name)
+  : how === "pct" ? b.pct - a.pct || b.titles.length - a.titles.length
+  : how === "seasons" ? b.seasons - a.seasons || b.titles.length - a.titles.length
+  : b.titles.length - a.titles.length || b.runnerUps.length - a.runnerUps.length || b.pct - a.pct);
+
+function managersView(ctx, p = {}) {
   const hasGames = ctx.seasons.some((s) => s.matchups.length);
-  const cards = allTime(ctx).map((r) => `
-    <article class="card manager">
-      <h3>${esc(r.name)}</h3>
-      <p class="trophies">${r.titles.length ? r.titles.map((y) => `${trophy} ${y}`).join("<br>") : `<span class="muted">No titles yet</span>`}</p>
-      <dl>
-        <dt>Record</dt><dd>${rec(r.w, r.l, r.t)} (${pct3(r.pct)})</dd>
-        <dt>Seasons</dt><dd>${esc(r.seasons)}</dd>
-        ${hasGames ? `<dt>Playoff trips</dt><dd>${esc(r.playoffs)}</dd>` : ""}
-        <dt>Runner-up</dt><dd>${r.runnerUps.length ? esc(r.runnerUps.join(", ")) : "-"}</dd>
-      </dl>
-    </article>`).join("");
-  return `<div class="cards">${cards}</div>`;
+  const how = MGR_SORTS.some(([k]) => k === p.msort) ? p.msort : "titles";
+  const all = managerProfiles(ctx);
+  const current = sortManagers(all.filter((r) => r.current), how);
+  const former = all.filter((r) => !r.current);
+  const chips = (years, cls) => years.map((y) => `<span class="yr ${cls}">${esc(y)}</span>`).join("");
+  const card = (r) => `
+    <article class="card mgr">
+      <div class="mgr-top">
+        <div class="avatar">${esc(initials(r.name))}</div>
+        <div class="mgr-id"><h3>${esc(r.name)}</h3><div class="muted">${esc(r.team)}${r.team ? " · " : ""}${esc(r.years)}</div></div>
+        <div class="mgr-titles" title="League titles"><span class="mgr-n">${esc(r.titles.length)}</span><span class="mgr-l">${r.titles.length === 1 ? "title" : "titles"}</span></div>
+      </div>
+      <div class="mgr-row"><span class="mgr-k">${trophy} Champion</span><span>${r.titles.length ? chips(r.titles, "gold") : `<span class="muted">No titles yet</span>`}</span></div>
+      <div class="mgr-row"><span class="mgr-k">Runner-up</span><span>${r.runnerUps.length ? chips(r.runnerUps, "") : `<span class="muted">-</span>`}</span></div>
+      <div class="mgr-stats">
+        <div><div class="k">Record</div><div class="v">${rec(r.w, r.l, r.t)}</div></div>
+        <div><div class="k">Win %</div><div class="v">${pct3(r.pct)}</div></div>
+        <div><div class="k">Seasons</div><div class="v">${esc(r.seasons)}</div></div>
+        ${hasGames ? `<div><div class="k">Playoffs</div><div class="v">${esc(r.playoffs)}</div></div>` : ""}
+      </div>
+      <div class="bar" title="Win % ${pct3(r.pct)}"><i style="width:${Math.round(r.pct * 100)}%"></i></div>
+      <button class="linkbtn mgr-h2h" data-act="mgr-h2h" data-id="${esc(r.managerId)}">Head-to-head record &rarr;</button>
+    </article>`;
+  const select = `<label class="inline">Sort by <select id="mgr-sort">${MGR_SORTS.map(([k, l]) => `<option value="${k}"${k === how ? " selected" : ""}>${l}</option>`).join("")}</select></label>`;
+  const formerRows = sortManagers(former, "titles").map((r) => [
+    `<strong>${esc(r.name)}</strong>`, esc(r.years), r.titles.length ? `${trophy} ${esc(r.titles.length)}` : "0", rec(r.w, r.l, r.t), pct3(r.pct), esc(r.seasons)]);
+  return `
+    <section class="card mgr-head"><div class="hb-head"><h2>Managers</h2>${select}</div>
+      <p class="note" style="margin:0">${current.length} current managers, ${former.length} former. Titles and records are all-time, across ESPN and Sleeper.</p></section>
+    <div class="cards mgr-grid">${current.map(card).join("")}</div>
+    ${former.length ? section("Former managers", table(["Manager", "Years", "Titles", "Record", "Win %", "Seasons"], formerRows)) : ""}`;
 }
 
 /* ---------- draft history ---------- */
@@ -1038,7 +1110,7 @@ function setLive(seasons, gdocs, drafts, trades) {
 const EDIT_PIN = String((typeof CONFIG !== "undefined" && CONFIG && CONFIG.editPin) || "");
 let unlocked = !EDIT_PIN;
 try { if (EDIT_PIN && localStorage.getItem("fh-unlocked") === EDIT_PIN) unlocked = true; } catch {}
-const params = { year: null, a: null, b: null, dyear: null, dview: "board", dpos: "all", dmgr: "all", dq: "", tyear: "all", tmgr: "all", tq: "", ht: "all" };
+const params = { year: null, a: null, b: null, dyear: null, dview: "board", dpos: "all", dmgr: "all", dq: "", tyear: "all", tmgr: "all", tq: "", ht: "all", msort: "titles" };
 let draft = newDraft();
 
 const use = (name) => (window.claude && window.claude.use ? window.claude.use(name).catch(() => null) : Promise.resolve(null));
@@ -1307,7 +1379,7 @@ const pages = {
   alltime: ["All-time", (c) => allTimeView(c)],
   h2h: ["Head-to-head", (c, p) => h2hView(c, p)],
   records: ["Records", (c) => recordsView(c)],
-  managers: ["Managers", (c) => managersView(c)],
+  managers: ["Managers", (c, p) => managersView(c, p)],
   handbook: ["Handbook", () => handbookView()],
   lock: ["Lock weeks", (c) => lockView(c)],
   data: ["Add data", () => dataView()],
@@ -1504,6 +1576,7 @@ document.addEventListener("input", (e) => {
 
 document.addEventListener("change", (e) => {
   const t = e.target;
+  if (t.id === "mgr-sort") { params.msort = t.value; return render(); }
   if (t.id === "trade-year") { params.tyear = t.value === "all" ? "all" : Number(t.value); return render(); }
   if (t.id === "trade-mgr") { params.tmgr = t.value; return render(); }
   if (t.id === "draft-year") { params.dyear = Number(t.value); return render(); }
@@ -1538,6 +1611,7 @@ document.addEventListener("click", (e) => {
     render();
   }
   else if (act === "clear") { draft = newDraft(); pendingFiles = []; status = ""; render(); }
+  else if (act === "mgr-h2h") { params.a = b.dataset.id; params.b = "all"; params.ht = "all"; location.hash = "#h2h"; window.scrollTo({ top: 0 }); }
   else if (act === "hb-jump") { const el = document.getElementById(b.dataset.target); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); }
   else if (act === "menu-toggle") setMenu(!document.querySelector("#drawer").classList.contains("open"));
   else if (act === "menu-close") setMenu(false);
