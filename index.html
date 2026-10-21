@@ -13,30 +13,36 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="manifest" href="manifest.webmanifest">
 <style>
-/* Colors and sizes live in these variables: change them here to restyle the whole site. */
+/* Colors and sizes live in these variables: change them here to restyle the whole site. White, blue and gold. */
 :root {
-  --bg: #f6f7f9;
+  --bg: #f3f6fc;
   --card: #ffffff;
-  --text: #1c2330;
-  --muted: #6b7686;
-  --line: #e3e7ed;
-  --accent: #1f6f4a;
-  --accent-soft: #e2f3ea;
-  --win: #d9f2e3;
-  --loss: #fbe0e0;
-  --even: #eef0f3;
+  --text: #14213d;
+  --muted: #5a6a8a;
+  --line: #dde5f3;
+  --accent: #1d3d8f;
+  --accent-soft: #e9f0ff;
+  --navy: #0f2557;
+  --gold: #f5b400;
+  --gold-soft: #fff6d6;
+  --on-accent: #ffffff;
+  --win: #dbe7ff;
+  --loss: #fde7e7;
+  --even: #edf1f8;
   --radius: 12px;
   --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #11151b; --card: #1a2029; --text: #e8ecf1; --muted: #93a0b2; --line: #2a3340;
-    --accent: #5cc796; --accent-soft: #1d3a2d; --win: #1e4a35; --loss: #5a2a2a; --even: #262e3a;
+    --bg: #0a1330; --card: #111d44; --text: #eaf0ff; --muted: #9db0d8; --line: #25346a;
+    --accent: #ffc72c; --accent-soft: #1b2b63; --navy: #eaf0ff; --gold: #ffc72c; --gold-soft: #3a3210; --on-accent: #0a1330;
+    --win: #1f3a7a; --loss: #5a2a38; --even: #1a2858;
   }
 }
 :root[data-theme="dark"] {
-    --bg: #11151b; --card: #1a2029; --text: #e8ecf1; --muted: #93a0b2; --line: #2a3340;
-    --accent: #5cc796; --accent-soft: #1d3a2d; --win: #1e4a35; --loss: #5a2a2a; --even: #262e3a;
+    --bg: #0a1330; --card: #111d44; --text: #eaf0ff; --muted: #9db0d8; --line: #25346a;
+    --accent: #ffc72c; --accent-soft: #1b2b63; --navy: #eaf0ff; --gold: #ffc72c; --gold-soft: #3a3210; --on-accent: #0a1330;
+    --win: #1f3a7a; --loss: #5a2a38; --even: #1a2858;
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 var(--font); }
@@ -200,6 +206,23 @@ h1.brand .tag { font-size: 15px; line-height: 1.2; }
   body.menu-open { overflow: hidden; }
 }
 @media (prefers-reduced-motion: reduce) { .drawer-panel, .drawer-backdrop { transition: none; } }
+
+/* theme: white, blue and gold */
+header { border-bottom: 3px solid var(--gold); }
+nav a.active { color: var(--accent); border-bottom-color: var(--gold); }
+h2 { color: var(--navy); border-left: 4px solid var(--gold); padding-left: 10px; }
+th { color: var(--accent); background: var(--accent-soft); }
+tbody tr:hover { background: var(--gold-soft); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.new, .kp { background: var(--gold); color: #14213d; }
+.big, .tile .v, .h2h-num, .h2h-name { color: var(--navy); }
+.h2h-side.lead { border-color: var(--gold); background: var(--gold-soft); }
+.banner { background: var(--gold-soft); border-color: var(--gold); }
+.banner.error { background: var(--loss); border-color: var(--line); }
+.chip:hover { border-color: var(--gold); background: var(--gold-soft); }
+.drawer-links a.active { border-left-color: var(--gold); }
+.card.manager { border-top: 3px solid var(--gold); }
+.trade { border-left: 3px solid var(--gold); }
 
 :root { box-sizing: border-box; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
 html { scroll-padding-top: env(safe-area-inset-top, 0px); }
