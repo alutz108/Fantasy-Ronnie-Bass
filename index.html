@@ -2289,10 +2289,12 @@ async function buildRecapData(info, ctx, finishedWeek, part) {
       s.h2h.push(me.points > op.points ? "W" : me.points < op.points ? "L" : "T"); s.med.push(me.points > med ? "W" : me.points < med ? "L" : "T"); seq.set(me.roster_id, s);
     }
   }
+  const tally = (a) => { const w = a.filter((x) => x === "W").length, l = a.filter((x) => x === "L").length, t = a.filter((x) => x === "T").length; return `${w}-${l}${t ? "-" + t : ""}`; };
   const streakOf = (a) => { const k = a[a.length - 1]; let n = 0; for (let i = a.length - 1; i >= 0 && a[i] === k; i--) n++; return k ? `${k}${n}` : ""; };
   const race = ranked.map((r) => { const t = teamOf(r.id), s = seq.get(r.id) || { h2h: [], med: [] };
     return { seed: r.seed, id: r.id, team: t.name, mgr: mgr(t), record: `${r.wins}-${r.losses}${r.ties ? "-" + r.ties : ""}`, pf: r.pf, rosterPts: t.rosterPts === undefined ? null : t.rosterPts,
       status: r.seed <= playoffTeams ? "in" : "out", winsFromCut: r.seed <= playoffTeams ? r.wins - firstOut : r.wins - cutWins,
+      h2hRecord: tally(s.h2h), medianRecord: tally(s.med),
       h2hStreak: streakOf(s.h2h), last5H2H: s.h2h.slice(-5).join(""), medianStreak: streakOf(s.med), last5Median: s.med.slice(-5).join("") }; });
   // picks 1-6 of the 2027 draft: the teams outside the playoff picture, fewest total roster points picks first
   const outTeams = race.filter((r) => r.status === "out").sort((a, b) => (a.rosterPts ?? a.pf) - (b.rosterPts ?? b.pf));
@@ -2317,13 +2319,42 @@ async function buildRecapData(info, ctx, finishedWeek, part) {
     return { type: x.type === "waiver" ? "waiver" : "free agent", bid: bid || 0, text: `${tn(rid)}: ${adds.length ? "added " + adds.join(", ") : ""}${adds.length && drops.length ? "; " : ""}${drops.length ? "dropped " + drops.join(", ") : ""}${bid ? ` ($${bid} FAAB)` : ""}` };
   }).sort((a, b) => (a.type === "trade" ? -1 : 0) - (b.type === "trade" ? -1 : 0) || (b.bid || 0) - (a.bid || 0)).slice(0, 40);
 
+  // ---- season-long bench ledger: points each team left on its bench, week by week (IR and taxi players never count)
+  const ledger = new Map();
+  for (let w = 1; w <= recapWeek; w++) for (const x of weeks[w] || []) {
+    if (!((x.points || 0) > 0)) continue;
+    const r = rosterBy.get(x.roster_id) || {}, pp = x.players_points || {};
+    const skip = new Set([...(r.reserve || []), ...(r.taxi || [])].map(String));
+    const starters = (x.starters || []).map(String).filter((p) => p !== "0"), sset = new Set(starters);
+    const pool = (x.players || []).map(String).filter((p) => sset.has(p) || !skip.has(p)).map((pid) => ({ pid, pos: info1(pid).pos, pts: pp[pid] || 0 }));
+    const started = starters.reduce((a, p) => a + (pp[p] || 0), 0);
+    const a = ledger.get(x.roster_id) || []; a.push({ week: w, left: Math.max(0, r1(optimal(pool) - started)) }); ledger.set(x.roster_id, a);
+  }
+  const benchLedger = [...ledger].map(([rid, arr]) => { const t = teamOf(rid), tot = r1(arr.reduce((s, y) => s + y.left, 0)), worst = arr.reduce((m, y) => (y.left > m.left ? y : m), arr[0]);
+    return { id: rid, team: t.name, mgr: mgr(t), totalLeftOnBench: tot, avgPerWeek: r1(tot / arr.length), worstWeek: worst, byWeek: arr.map((y) => y.left) }; }).sort((a, b) => b.totalLeftOnBench - a.totalLeftOnBench);
+
+  // ---- dynasty view: ages, rookies (and where they sit), and the trade deadline
+  const lastRows = weeks[recapWeek] || [];
+  const dynasty = rosters.map((r) => {
+    const t = teamOf(r.roster_id), reserve = new Set((r.reserve || []).map(String)), taxi = new Set((r.taxi || []).map(String));
+    const startersNow = new Set(((lastRows.find((y) => y.roster_id === r.roster_id) || {}).starters || []).map(String));
+    const ps = (r.players || []).map(String).map((pid) => { const p = dbAll[pid] || {}, i = info1(pid); return { name: i.name, pos: i.pos, nfl: i.team, age: p.age == null ? null : p.age, exp: p.years_exp == null ? null : p.years_exp, status: taxi.has(pid) ? "taxi" : reserve.has(pid) ? "IR" : startersNow.has(pid) ? "starter" : "bench" }; });
+    const aged = ps.filter((p) => p.age && p.pos !== "DST" && p.status !== "taxi");
+    return { id: r.roster_id, team: t.name, mgr: mgr(t), avgAge: aged.length ? r1(aged.reduce((a, p) => a + p.age, 0) / aged.length) : null,
+      rookies: ps.filter((p) => p.exp === 0 && p.pos !== "DST").map((p) => `${p.name}|${p.pos}|${p.nfl}|age ${p.age ?? "?"}|${p.status}`),
+      age29plus: ps.filter((p) => p.age >= 29 && p.pos !== "DST").sort((a, b) => b.age - a.age).map((p) => `${p.name}|${p.pos}|${p.age}|${p.status}`) };
+  }).sort((a, b) => (a.avgAge ?? 99) - (b.avgAge ?? 99));
+  const td = Number(league.settings && league.settings.trade_deadline) || 0;
+  const tradeDeadline = td > 0 && td < 99 ? { week: td, weeksFromNow: td - recapWeek } : { week: null, note: "Sleeper shows no trade deadline" };
+
   const liveSeason = ctx.seasons.find((s) => s.live && s.rosterWeeks && s.year === Number(league.season));
   const out = {
     note: "Lineups are strings. Recap rows: slot|player|position|NFL team|points. Preview rows: slot|player|position|NFL team|injury|season average|last week.",
     part, season: Number(league.season), recapWeek, previewWeek, startingSlots: slots, leagueMedianScore: r1(median),
     standings: season ? season.teams.map((t) => ({ id: t.teamId, team: t.name, mgr: mgr(t), record: `${t.wins}-${t.losses}${t.ties ? "-" + t.ties : ""}`, pf: t.pf, rosterPts: t.rosterPts })) : [],
-    league: { weeksLeft, playoffTeams, note: "race: seeds by record then points for; status in or out of the playoff picture; winsFromCut is the cushion for teams in and the deficit for teams out. h2hStreak and medianStreak are current streaks (W3 = three wins in a row); last5 strings are oldest to newest. draftWatch: picks 1 to 6 of the 2027 draft go to non-playoff teams, fewest total roster points picks first (a projection until the regular season ends). happenings: transactions from roughly the last 10 days.",
+    league: { weeksLeft, playoffTeams, note: "race: seeds by record then points for; status in or out of the playoff picture; winsFromCut is the cushion for teams in and the deficit for teams out. h2hRecord and medianRecord split each team's record into its weekly head-to-head and league-median games (the gap is the luck meter). h2hStreak and medianStreak are current streaks (W3 = three wins in a row); last5 strings are oldest to newest. draftWatch: picks 1 to 6 of the 2027 draft go to non-playoff teams, fewest total roster points picks first (a projection until the regular season ends). happenings: transactions from roughly the last 10 days.",
       race, draftWatch, happenings, happeningsTotal: recent.length },
+    benchLedger, dynasty, tradeDeadline,
   };
   if (recap) { out.recap = recap; if (liveSeason && typeof lockFileData === "function") out.lock = lockFileData(liveSeason); }
   if (preview) out.preview = preview;
