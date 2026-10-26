@@ -324,6 +324,26 @@ textarea#recap-json { width: 100%; font-family: ui-monospace, Menlo, Consolas, m
 .np-note table { font: 13px var(--font); } .np-note th, .np-note td { padding: 5px 8px; }
 @media (max-width: 720px) { .np-notebook { grid-template-columns: 1fr; } }
 
+/* old-newspaper box scores */
+.np-bs-wrap { margin: 12px 0 18px; border-top: 3px double var(--rule); border-bottom: 3px double var(--rule); padding: 8px 0 10px; }
+.np-bs-head { display: flex; justify-content: space-between; gap: 10px; padding: 0 2px 6px; margin-bottom: 4px; border-bottom: 1px solid var(--rule); font: 800 11px var(--font); letter-spacing: .18em; text-transform: uppercase; color: var(--navy); }
+.np-bs-grid { display: grid; grid-template-columns: repeat(3, 1fr); }
+.np-bs { padding: 7px 16px 8px; border-right: 1px solid var(--line); border-bottom: 1px dotted var(--muted); min-width: 0; }
+.np-bs:nth-child(3n) { border-right: 0; }
+.np-bs:nth-last-child(-n+3) { border-bottom: 0; }
+.np-bs-row { display: flex; align-items: baseline; gap: 6px; font-family: Georgia, "Times New Roman", Times, serif; font-size: 14px; line-height: 1.6; }
+.np-bs-name { display: flex; align-items: baseline; gap: 6px; min-width: 0; flex: 0 1 auto; }
+.np-bs-mgr { flex: none; }
+.np-bs-name em { font-style: normal; font: 11px var(--font); color: var(--muted); letter-spacing: .02em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.np-bs-dots { flex: 1 1 10px; min-width: 10px; border-bottom: 1px dotted var(--muted); transform: translateY(-3px); }
+.np-bs-pts { flex: none; font-variant-numeric: tabular-nums; }
+.np-bs-row.w { font-weight: 800; color: var(--navy); }
+.np-bs-row.w .np-bs-mgr::before { content: "\25A0\00a0"; font-size: 8px; color: var(--gold); vertical-align: middle; }
+.np-bs-foot { margin-top: 2px; font: 700 10px var(--font); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.np-bs-note { margin-top: 8px; padding-top: 7px; border-top: 1px solid var(--line); text-align: center; font: italic 12px Georgia, "Times New Roman", Times, serif; color: var(--muted); }
+@media (max-width: 900px) { .np-bs-grid { grid-template-columns: repeat(2, 1fr); } .np-bs:nth-child(3n) { border-right: 1px solid var(--line); } .np-bs:nth-child(2n) { border-right: 0; } .np-bs:nth-last-child(-n+3) { border-bottom: 1px dotted var(--muted); } .np-bs:nth-last-child(-n+2) { border-bottom: 0; } }
+@media (max-width: 560px) { .np-bs-grid { grid-template-columns: 1fr; } .np-bs { border-right: 0 !important; border-bottom: 1px dotted var(--muted) !important; } .np-bs:last-child { border-bottom: 0 !important; } }
+
 :root { box-sizing: border-box; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
 html { scroll-padding-top: env(safe-area-inset-top, 0px); }
 
@@ -1063,12 +1083,33 @@ function recapsView(ctx, p, recaps) {
   const sidebars = (ed.sidebars || []).map((s) => `<aside class="np-box"><div class="np-box-h">${esc(s.title)}</div><ul>${(s.items || []).map((i) => `<li>${esc(i).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")}</li>`).join("")}</ul></aside>`).join("");
   const awards = (ed.awards || []).length ? `<section class="np-sec"><div class="np-sec-h">Awards</div><div class="awards">${ed.awards.map((a) => `<div class="award"><div class="award-k">${esc(a.label)}</div><div class="award-v">${a.team ? who(a.team) : ""}</div><div class="award-t">${mdText(a.text)}</div></div>`).join("")}</div></section>` : "";
   const picks = !recap && stories.some((m) => m.pick) ? `<section class="np-sec"><div class="np-sec-h">The Picks</div>${table(["Matchup", "Our pick", "Why"], stories.filter((m) => m.pick).map((m) => [`${esc(team(m.a).name)} vs ${esc(team(m.b).name)}`, who(m.pick), esc(m.why || "")]))}</section>` : "";
-  const ticker = recap && stories.length ? `<div class="np-ticker">${stories.map((m) => { const sc = scoreOf(m.a, m.b); return sc ? `<span><strong>${esc(team(m.a).name)}</strong> ${f2(sc[0])}, <strong>${esc(team(m.b).name)}</strong> ${f2(sc[1])}</span>` : ""; }).join("")}</div>` : "";
+  // old-newspaper box scores: one small box per game, winner in bold, with a footer line of highs and lows
+  const boxName = (id) => { const t = team(id); return `<span class="np-bs-name"><span class="np-bs-mgr">${esc(t.managerId ? ctx.name(t.managerId) : "")}</span><em>${esc(t.name)}</em></span>`; };
+  const boxScores = (() => {
+    if (!stories.length) return "";
+    const inOrder = [...stories].sort((x, y) => x._i - y._i);
+    if (recap) {
+      const games = inOrder.map((m) => ({ m, sc: scoreOf(m.a, m.b) })).filter((g) => g.sc);
+      if (!games.length) return "";
+      const all = games.flatMap((g) => [{ id: g.m.a, pts: g.sc[0] }, { id: g.m.b, pts: g.sc[1] }]);
+      const sorted = [...all].sort((a, b) => a.pts - b.pts), n = sorted.length;
+      const median = (sorted[Math.floor((n - 1) / 2)].pts + sorted[Math.ceil((n - 1) / 2)].pts) / 2;
+      const hi = sorted[n - 1], lo = sorted[0];
+      const cell = (g) => { const [x, y] = g.sc, win = x > y ? 0 : y > x ? 1 : -1;
+        const row = (id, pts, w) => `<div class="np-bs-row${win === w ? " w" : ""}">${boxName(id)}<span class="np-bs-dots"></span><span class="np-bs-pts">${f2(pts)}</span></div>`;
+        return `<div class="np-bs">${row(g.m.a, x, 0)}${row(g.m.b, y, 1)}<div class="np-bs-foot">Final &middot; margin ${f2(Math.abs(x - y))}</div></div>`; };
+      return `<section class="np-bs-wrap"><div class="np-bs-head"><span>Box scores</span><span>Week ${esc(cur.week)} &middot; Final</span></div><div class="np-bs-grid">${games.map(cell).join("")}</div>
+        <div class="np-bs-note">High score: ${esc(team(hi.id).name)} ${f2(hi.pts)} &middot; Low score: ${esc(team(lo.id).name)} ${f2(lo.pts)} &middot; League median: ${f2(median)}</div></section>`;
+    }
+    const cell = (m) => { const row = (id) => `<div class="np-bs-row${m.pick === id ? " w" : ""}">${boxName(id)}<span class="np-bs-dots"></span><span class="np-bs-pts">${esc(record(id))}</span></div>`;
+      return `<div class="np-bs">${row(m.a)}${row(m.b)}<div class="np-bs-foot">${m.pick ? "Our pick: " + esc(team(m.pick).name) : "Week " + esc(cur.week)}</div></div>`; };
+    return `<section class="np-bs-wrap"><div class="np-bs-head"><span>The slate</span><span>Week ${esc(cur.week)} &middot; Records</span></div><div class="np-bs-grid">${inOrder.map(cell).join("")}</div></section>`;
+  })();
 
   return `<section class="paper">${masthead(`
     <div class="np-bar"><span>${esc(label(cur))}</span><label class="inline" style="margin:0"><span class="np-lbl">Edition</span> <select id="recap-edition">${options}</select></label></div>
     ${ed.title ? `<h2 class="np-banner">${esc(ed.title)}</h2>` : ""}${ed.deck ? `<p class="np-deck np-center">${esc(ed.deck)}</p>` : ""}
-    ${ticker}
+    ${boxScores}
     ${ed.intro ? `<div class="np-editor"><div class="np-sec-h">From the editor’s desk</div>${mdText(ed.intro)}</div>` : ""}
     ${leadStory ? story(leadStory) : ""}
     ${features.length ? `<div class="np-grid">${features.map(story).join("")}</div>` : ""}
