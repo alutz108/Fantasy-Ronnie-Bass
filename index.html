@@ -989,7 +989,7 @@ function lockView(ctx) {
 }
 
 /* ---------- the paper: weekly recap and preview editions ---------- */
-const PAPER = { name: "The Ronnie Bass Gazette", tagline: "Est. 2010 · All the news that’s fit to roast" };
+const PAPER = { name: "The Weekly Roundup", recapTag: "Coach Boone’s Week in Review", previewTag: "Coach Boone’s Preview", soonTag: "Coach Boone’s Week in Review and Preview" };
 const f2 = (n) => Number(n ?? 0).toFixed(2);
 // plain text with **bold**; blank lines make new paragraphs
 const mdText = (t) => String(t || "").split(/\n{2,}/).map((p) => `<p>${esc(p.trim()).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")}</p>`).join("");
@@ -1007,10 +1007,10 @@ function recapEditions(recaps) {
 
 function recapsView(ctx, p, recaps) {
   const eds = recapEditions(recaps);
-  const masthead = (inner, left = "", right = "") => `
+  const masthead = (inner, left = "", right = "", tag = PAPER.soonTag) => `
     <div class="np-top"><span>${left}</span><span>${right}</span></div>
     <div class="np-name">${esc(PAPER.name)}</div>
-    <div class="np-tag">${esc(PAPER.tagline)}</div>${inner}`;
+    <div class="np-tag">${esc(tag)}</div>${inner}`;
   if (!eds.length) {
     return `<section class="paper">${masthead(`<div class="np-bar"><span>Coming soon</span></div><p class="np-deck">The first edition is on its way. Every week: a recap of last week’s matchups after the scores are final on Tuesday, and a preview of the next slate on Thursday, with the player matchups that matter.</p>`, "Vol. 17 · No. 1", "Est. 2010")}</section>`;
   }
@@ -1075,7 +1075,7 @@ function recapsView(ctx, p, recaps) {
     ${briefs.length ? `<section class="np-briefs"><div class="np-sec-h">In brief</div><div class="np-brief-grid">${briefs.map(story).join("")}</div></section>` : ""}
     ${sidebars ? `<div class="np-boxes">${sidebars}</div>` : ""}
     ${notebook}
-    ${picks}${awards}`, `Vol. ${cur.year - 2009} · No. ${issueNo}`, esc(ed.date || `${cur.year} season`))}</section>`;
+    ${picks}${awards}`, `Vol. ${cur.year - 2009} · No. ${issueNo}`, esc(ed.date || `${cur.year} season`), recap ? PAPER.recapTag : PAPER.previewTag)}</section>`;
 }
 
 function recapDataView(ctx) {
@@ -1566,7 +1566,7 @@ function scoresView() {
 const pages = {
   champions: ["Champions", (c) => championsView(c)],
   standings: ["Standings", (c, p) => standingsView(c, p.year)],
-  recaps: ["Preview/Recap", (c, p) => recapsView(c, p, BASE_RECAPS)],
+  recaps: ["Weekly Roundup", (c, p) => recapsView(c, p, BASE_RECAPS)],
   draft: ["Draft", (c, p) => draftView(c, p)],
   trades: ["Trades", (c, p) => tradesView(c, p)],
   alltime: ["All-time", (c) => allTimeView(c)],
