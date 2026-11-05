@@ -2849,6 +2849,25 @@ function doRank(season, playoffTeams, bracket) {
   return { order, useBench, outCount: outRows.length };
 }
 
+// everyone who has held each future pick, oldest first, replayed from the league's trade history ("2027-1-7" = round 1 of 2027, originally team 7)
+function doChains(cx) {
+  const chains = new Map(), trades = [...((cx.data && cx.data.trades) || [])].sort((a, b) => (a.at || 0) - (b.at || 0));
+  for (const t of trades) for (const sd of t.sides || []) for (const g of sd.got || []) {
+    if (!g || g.k !== "d" || g.o == null) continue;
+    const key = `${g.y}-${g.rd}-${g.o}`, list = chains.get(key) || [g.o];
+    if (list[list.length - 1] !== sd.r) list.push(sd.r);
+    chains.set(key, list);
+  }
+  return chains;
+}
+
+// the teams a traded pick came through, most recent first and the original team last. The trade history gives the whole chain when it agrees
+// with Sleeper about who holds the pick and who held it before. Otherwise only Sleeper's own previous owner is used.
+function doVia(hist, orig, owner, prevId) {
+  if (hist && hist.length >= 2 && hist[hist.length - 1] === owner && (prevId == null || hist[hist.length - 2] === prevId)) return hist.slice(0, -1).reverse();
+  return prevId != null && prevId !== orig && prevId !== owner ? [prevId, orig] : [orig];
+}
+
 // every pick of the draft with its owner. For a draft that has no order yet, teams are listed A to Z.
 function doBuild(cx, info, data, year) {
   const settings = (data && data.league && data.league.settings) || {};
@@ -2856,16 +2875,16 @@ function doBuild(cx, info, data, year) {
   const ranked = doRank(info.season, playoffTeams, data && data.bracket), ordered = year === info.upcoming;
   const nm = (t) => cx.name(t.managerId);
   const order = ordered ? ranked.order : [...ranked.order].sort((a, b) => nm(a).localeCompare(nm(b))).map((r, i) => ({ ...r, slot: null }));
-  const ids = new Set(order.map((t) => t.id)), owner = new Map();
+  const ids = new Set(order.map((t) => t.id)), owner = new Map(), prev = new Map(), chains = doChains(cx);
   order.forEach((t) => { for (let r = 1; r <= rounds; r++) owner.set(r + "-" + t.id, t.id); });
   for (const tp of (data && data.tradedPicks) || []) {
     const r = Number(tp.round), k = r + "-" + tp.roster_id;
-    if (Number(tp.season) === year && r >= 1 && r <= rounds && ids.has(tp.roster_id) && ids.has(tp.owner_id) && owner.has(k)) owner.set(k, tp.owner_id);
+    if (Number(tp.season) === year && r >= 1 && r <= rounds && ids.has(tp.roster_id) && ids.has(tp.owner_id) && owner.has(k)) { owner.set(k, tp.owner_id); prev.set(k, tp.previous_owner_id); }
   }
   const byId = new Map(order.map((t) => [t.id, t])), picks = [];
   for (let r = 1; r <= rounds; r++) for (const t of order) {
-    const oid = owner.get(r + "-" + t.id);
-    picks.push({ round: r, slot: t.slot, label: t.slot ? `${r}.${doPad(t.slot)}` : `Round ${r}`, from: t, owner: byId.get(oid), traded: oid !== t.id });
+    const oid = owner.get(r + "-" + t.id), traded = oid !== t.id;
+    picks.push({ round: r, slot: t.slot, label: t.slot ? `${r}.${doPad(t.slot)}` : `Round ${r}`, from: t, owner: byId.get(oid), traded, via: traded ? doVia(chains.get(`${year}-${r}-${t.id}`), t.id, oid, prev.get(r + "-" + t.id)).map((id) => byId.get(id)).filter(Boolean) : [] });
   }
   return { year, ordered, rounds, playoffTeams, order, useBench: ranked.useBench, outCount: ranked.outCount, picks, traded: picks.filter((p) => p.traded), nm };
 }
@@ -2909,13 +2928,14 @@ function draftOrderView(cx) {
       <p>Until the playoffs are played, picks 7 to 12 assume the better seed always wins, so they can still change. Every round uses the same order. ${B.useBench ? "" : "Total team points aren\u2019t available yet, so points scored by starters are used for now."}</p></details></section>`;
 
   // the three rounds
-  const moved = (p) => (p.traded ? ` <span class="do-chip">Traded</span>` : "");
+  const viaTxt = (p) => p.via.map((t) => `via ${tname(t)}`).join(" ");
+  const moved = (p) => (p.traded ? `${phone ? "<br>" : " "}<span class="muted">(${viaTxt(p)})</span>` : "");
   const roundHtml = B.ordered ? Array.from({ length: B.rounds }, (_, i) => i + 1).map((r) => {
     const list = B.picks.filter((p) => p.round === r);
     const rows = list.map((p) => {
       const line = B.outCount && p.slot === B.outCount + 1 ? " do-line" : "";
       const whose = p.traded ? tname(p.from) : `<span class="muted">own</span>`;
-      const cells = phone ? [`<strong>${esc(p.label)}</strong>`, `<strong>${tname(p.owner)}</strong>`, `${whose}<br><span class="tm-small muted">${rec(p.from)}</span>`]
+      const cells = phone ? [`<strong>${esc(p.label)}</strong>`, `<strong>${tname(p.owner)}</strong>${moved(p)}`, `${whose}<br><span class="tm-small muted">${rec(p.from)}</span>`]
         : [`<strong>${esc(p.label)}</strong>`, `<strong>${tname(p.owner)}</strong>${moved(p)}`, whose, rec(p.from)];
       if (r === 1 && !phone) cells.push(p.slot <= B.outCount ? tmFmt(p.from.pts) : `<span class="muted">playoffs</span>`);
       return `<tr class="${p.traded ? "do-traded" : ""}${line}">${cells.map((c) => `<td>${c}</td>`).join("")}</tr>`;
@@ -2926,23 +2946,21 @@ function draftOrderView(cx) {
 
   // who holds what
   const mgrs = B.order.map((t) => ({ t, mine: B.picks.filter((p) => p.owner.id === t.id) })).sort((a, b) => b.mine.length - a.mine.length || nm(a.t).localeCompare(nm(b.t)));
-  const cell = (list) => list.length ? list.map((p) => (B.ordered ? `${esc(p.label)}${p.traded ? ` <span class="muted">(${tname(p.from)})</span>` : ""}` : (p.traded ? `${tname(p.from)}\u2019s` : "own"))).join("<br>") : `<span class="muted">\u2013</span>`;
+  const cell = (list) => list.length ? list.map((p) => (B.ordered ? `${esc(p.label)}${p.traded ? ` <span class="muted">(${viaTxt(p)})</span>` : ""}` : (p.traded ? `<span class="muted">(${viaTxt(p)})</span>` : "own"))).join("<br>") : `<span class="muted">\u2013</span>`;
   const holdRows = mgrs.map(({ t, mine }) => [`<strong>${tname(t)}</strong>`, ...Array.from({ length: B.rounds }, (_, i) => cell(mine.filter((p) => p.round === i + 1))), esc(mine.length)]);
   const holdHeads = ["Manager", ...Array.from({ length: B.rounds }, (_, i) => `Round ${i + 1}`), "Total"];
 
   // traded picks
-  const tradedRows = [...B.traded].sort((a, b) => a.round - b.round || (a.slot || 0) - (b.slot || 0) || nm(a.from).localeCompare(nm(b.from))).map((p) => [esc(p.label), tname(p.from), `<strong>${tname(p.owner)}</strong>`]);
   const firsts = mgrs.map(({ t, mine }) => ({ t, n: mine.filter((p) => p.round === 1).length })).sort((a, b) => b.n - a.n);
   const most = firsts[0] && firsts[0].n > 1 ? firsts.filter((x) => x.n === firsts[0].n) : [];
   const top = B.ordered ? B.picks.find((p) => p.slot === 1 && p.round === 1) : null;
   const tiles = `<div class="tm-teams pc-tiles">
     ${top ? `<div class="tm-team"><div class="tm-small muted">Projected 1.01</div><div class="tm-tname">${tname(top.owner)}</div><div class="tm-small">${top.traded ? `Earned by ${tname(top.from)}` : "Own pick"} \u00b7 ${rec(top.from)}</div></div>` : ""}
-    <div class="tm-team"><div class="tm-small muted">Picks that have moved</div><div class="tm-tname">${B.traded.length} of ${B.picks.length}</div><div class="tm-small">${B.traded.length ? "marked Traded below" : "none traded yet"}</div></div>
+    <div class="tm-team"><div class="tm-small muted">Picks that have moved</div><div class="tm-tname">${B.traded.length} of ${B.picks.length}</div><div class="tm-small">${B.traded.length ? "shown in gold below" : "none traded yet"}</div></div>
     <div class="tm-team"><div class="tm-small muted">Most 1st-round picks</div><div class="tm-tname">${most.length ? most.map((x) => tname(x.t)).join(", ") : "No one"}</div><div class="tm-small">${most.length ? `${most[0].n} each` : "everyone has one or none"}</div></div></div>`;
-  const tradedSec = `<section class="card do-sec"><h3>Traded picks</h3>${B.traded.length ? `<div class="table-wrap"><table><thead><tr><th>Pick</th><th>Whose pick</th><th>Now with</th></tr></thead><tbody>${tradedRows.map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join("")}</tr>`).join("")}</tbody></table></div>` : `<p class="muted">No ${DO.year} picks have been traded yet.</p>`}</section>`;
-  const holdSec = `<section class="card do-sec"><h3>Who holds what</h3><p class="tm-small muted">${B.ordered ? "Pick numbers, with the original team in brackets for picks acquired by trade." : "\u201cown\u201d is the manager\u2019s own pick. Otherwise it shows whose pick it is."}</p>${table(holdHeads, holdRows)}</section>`;
+  const holdSec = `<section class="card do-sec"><h3>Who holds what</h3><p class="tm-small muted">${B.ordered ? "Pick numbers, with where each traded pick came from in brackets." : "\u201cown\u201d is the manager\u2019s own pick. Otherwise it shows where the pick came from."}</p>${table(holdHeads, holdRows)}</section>`;
   const later = B.ordered ? "" : `<section class="card"><p class="muted">The ${DO.year} order will be set by the ${DO.year - 1} season, so only ownership is shown.</p></section>`;
-  return `<div id="do-root">${head}${tiles}${later}${roundHtml}${tradedSec}${holdSec}</div>`;
+  return `<div id="do-root">${head}${tiles}${later}${roundHtml}${holdSec}</div>`;
 }
 
 document.addEventListener("change", (e) => { const s = e.target.closest && e.target.closest("select[data-do=year]"); if (s) { DO.year = Number(s.value); render(); } });
