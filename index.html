@@ -1787,7 +1787,7 @@ const pages = {
 
 function render() {
   const wanted = location.hash.slice(1);
-  const key = pages[wanted] && !(READ_ONLY && (wanted === "data" || wanted === "scores")) ? wanted : "champions";
+  const key = pages[wanted] && !(READ_ONLY && (wanted === "data" || wanted === "scores")) ? wanted : "standings";
   const hasDrafts = draftYears(ctx).length > 0;
   const navLinks = Object.entries(pages)
     .filter(([k]) => (k !== "draft" || hasDrafts) && (k !== "trades" || (ctx.data.trades || []).length > 0) && k !== "lock" && k !== "recapdata" && k !== "pickcard" && !(READ_ONLY && (k === "data" || k === "scores")))
@@ -2106,7 +2106,7 @@ function enhanceTables() {
   const tables = [...view.querySelectorAll("table")];
   tables.forEach((table, n) => {
     if (table.closest(".board, .hb, .entry") || !table.tBodies[0] || table.tBodies[0].rows.length < 2) return;
-    const key = (location.hash || "#champions") + ":" + n;
+    const key = (location.hash || "#standings") + ":" + n;
     const st = sortState.get(key);
     [...table.tHead.rows[0].cells].forEach((th, i) => {
       if (!th.textContent.trim()) return;
