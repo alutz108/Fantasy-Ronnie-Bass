@@ -589,6 +589,10 @@ html { scroll-padding-top: env(safe-area-inset-top, 0px); }
 #view a:not(.btn):not(.linkbtn):not(.chip), #view a:not(.btn):not(.linkbtn):not(.chip):visited { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
 
 .share-btn.primary { min-height: 44px; padding: 8px 18px; font-size: 16px; }
+
+/* the Thanksgiving logo is a little taller, with matching negative margins so the header keeps its height */
+h1.brand .logo.festive { height: 66px; margin: -5px 0; }
+@media (max-width: 720px) { h1.brand .logo.festive { height: 52px; margin: -4px 0; } }
 </style>
 </head>
 <body>
@@ -2239,6 +2243,15 @@ function setMenu(open) {
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") setMenu(false); });
 window.addEventListener("hashchange", () => { status = ""; confirmDel = null; confirmDelGames = null; setMenu(false); render(); });
 
+/* ---------- seasonal logo ---------- */
+// In November the header (and the share pictures) show the Thanksgiving logo. If the picture file is missing, the normal logo stays.
+function festiveLogoFor(now) { return now && now.getMonth() === 10 ? "logo-thanksgiving.png" : ""; }
+function applySeasonalLogo(now) {
+  const file = festiveLogoFor(now), el = document.querySelector("h1.brand .logo"); if (!file || !el) return;
+  const probe = new Image(); probe.onload = () => { el.src = file; el.classList.add("festive"); }; probe.src = file;
+}
+applySeasonalLogo(new Date());
+
 /* ---------- Trade Machine (test build) ---------- */
 // A calculator only: it never sends a trade. Rosters and picks come live from Sleeper; values blend several sources.
 const TM = {
@@ -3737,7 +3750,7 @@ function drawShareCard(canvas, m, opts) {
 /* ---- sharing ---- */
 function shareLogo() {
   if (SHARE.logo !== undefined) return Promise.resolve(SHARE.logo);
-  return new Promise((res) => { try { const img = new Image(); img.onload = () => res((SHARE.logo = img)); img.onerror = () => res((SHARE.logo = null)); img.src = "logo.png"; setTimeout(() => { if (SHARE.logo === undefined) SHARE.logo = null; res(SHARE.logo); }, 1500); } catch (e) { res((SHARE.logo = null)); } });
+  return new Promise((res) => { try { const seasonal = typeof festiveLogoFor === "function" ? festiveLogoFor(new Date()) : "", load = (src, next) => { const img = new Image(); img.onload = () => res((SHARE.logo = img)); img.onerror = () => (next ? load(next) : res((SHARE.logo = null))); img.src = src; }; load(seasonal || "logo.png", seasonal ? "logo.png" : ""); setTimeout(() => { if (SHARE.logo === undefined) SHARE.logo = null; res(SHARE.logo); }, 1500); } catch (e) { res((SHARE.logo = null)); } });
 }
 function shareBtn(kind, payload, opts) {
   const id = "s" + ++SHARE.n, label = (opts && opts.label) || "Share", cls = opts && opts.cls ? " " + opts.cls : "";
