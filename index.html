@@ -590,9 +590,9 @@ html { scroll-padding-top: env(safe-area-inset-top, 0px); }
 
 .share-btn.primary { min-height: 44px; padding: 8px 18px; font-size: 16px; }
 
-/* the Thanksgiving logo is a little taller, with matching negative margins so the header keeps its height */
-h1.brand .logo.festive { height: 66px; margin: -5px 0; }
-@media (max-width: 720px) { h1.brand .logo.festive { height: 52px; margin: -4px 0; } }
+/* the Thanksgiving logo is taller (the feathers rise above the crest). The feathers use the header's top padding, so the header keeps its height. */
+h1.brand .logo.festive { height: 70px; margin: -14px 0 0; }
+@media (max-width: 720px) { h1.brand .logo.festive { height: 52px; margin: -8px 0 0; } }
 </style>
 </head>
 <body>
@@ -3739,7 +3739,7 @@ function shareLayout(ctx, m) {
   }
   // footer: the note on up to two lines, then the site name. The right-hand corner is kept free for the logo.
   const noteW = inner - 110, foot = shareWrap(ctx, m.footer || "", noteW, "400", 24, shareSans).slice(0, 2), site = shareFit(ctx, (typeof SITE_NAME !== "undefined" && SITE_NAME) || "League History", noteW, "700", 26, 16, shareSans);
-  const fy = y + 8, siteY = fy + 44 + (m.footer ? foot.length * 32 : 0) + 8, H = siteY + 44;
+  const fy = y + 8, siteY = fy + 44 + (m.footer ? foot.length * 32 : 0) + 8, H = Math.max(siteY + 44, fy + 20 + 96 + 16);
   ops.push((g) => { g.fillStyle = c.line; g.fillRect(pad, fy, inner, 3); g.fillStyle = c.muted; g.font = `400 24px ${shareSans}`; if (m.footer) foot.forEach((line, i) => g.fillText(line, pad, fy + 44 + i * 32)); g.fillStyle = c.navy; g.font = `700 ${site.size}px ${shareSans}`; g.fillText(site.text, pad, siteY); });
   return { ops, H, fy };
 }
@@ -3747,7 +3747,8 @@ function drawShareCard(canvas, m, opts) {
   opts = opts || {}; const ctx = canvas.getContext("2d"); canvas.width = SHARE.W; const lay = shareLayout(ctx, m); canvas.height = lay.H;   // setting the size clears the canvas
   ctx.fillStyle = SHARE.c.paper; ctx.fillRect(0, 0, SHARE.W, lay.H); ctx.textBaseline = "alphabetic";
   lay.ops.forEach((op) => op(ctx));
-  if (opts.logo) { try { ctx.drawImage(opts.logo, SHARE.W - SHARE.pad - 84, lay.fy + 20, 84, 84); } catch (e) {} }
+  if (opts.logo) { try { const lw = opts.logo.naturalWidth || opts.logo.width || 1, lh = opts.logo.naturalHeight || opts.logo.height || 1, k = Math.min(96 / lw, 96 / lh), dw = lw * k, dh = lh * k;   // keeps the logo's own proportions, in a 96-pixel box in the corner
+    ctx.drawImage(opts.logo, SHARE.W - SHARE.pad - dw, lay.fy + 20 + (96 - dh) / 2, dw, dh); } catch (e) {} }
   return { width: SHARE.W, height: lay.H, fy: lay.fy };
 }
 
