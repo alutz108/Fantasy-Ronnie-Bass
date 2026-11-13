@@ -4109,6 +4109,9 @@ function sleeperToDocs(raw, names) {
   const nameMap = names || {};
   const year = Number(league.season);
   const start = (league.settings && league.settings.playoff_week_start) || 15;
+  // While a season is running, only weeks Sleeper has finished scoring count. A week in progress holds partial scores
+  // (a team with one player on the field shows 5 points) and must never be recorded as a result.
+  const capWeek = league.status === "in_season" ? Number(league.settings && league.settings.last_scored_leg) || 0 : 0;
   // Weeks I have frozen (see the lock page) win over whatever Sleeper says today; later weeks are worked out live.
   const lockedYear = (typeof LOCKED_WEEKS !== "undefined" && LOCKED_WEEKS && LOCKED_WEEKS[year]) || {};
   const lockedWeeks = Object.keys(lockedYear).map(Number).filter((w) => w < start).sort((a, b) => a - b);
@@ -4118,7 +4121,7 @@ function sleeperToDocs(raw, names) {
     const live = rt && rt.totals[rid] && rt.totals[rid].byWeek[w];
     return live || 0;
   };
-  const weeksOf = (rid) => [...new Set([...lockedWeeks, ...Object.keys((rt && rt.totals[rid] && rt.totals[rid].byWeek) || {}).map(Number)])].filter((w) => w < start).sort((a, b) => a - b);
+  const weeksOf = (rid) => [...new Set([...lockedWeeks, ...Object.keys((rt && rt.totals[rid] && rt.totals[rid].byWeek) || {}).map(Number).filter((w) => !capWeek || w <= capWeek)])].filter((w) => w < start).sort((a, b) => a - b);
   const rosterOf = (rid) => Math.round(weeksOf(rid).reduce((t, w) => t + weekPts(rid, w), 0) * 100) / 100;
   const rosterInfo = raw.rosterTotals ? {
     live: true, rosterCheck: { checked: raw.rosterTotals.checked, matched: raw.rosterTotals.matched }, rosterMissing: !raw.rosterTotals.ok,
@@ -4156,6 +4159,7 @@ function sleeperToDocs(raw, names) {
   const games = [];
   const weeks = Object.keys(matchups || {}).map(Number).sort((a, b) => a - b);
   for (const wk of weeks) {
+    if (capWeek && wk > capWeek) continue;   // not finished yet: in progress or still to come
     const groups = new Map();
     for (const x of matchups[wk]) {
       if (x.matchup_id === null || x.matchup_id === undefined) continue;
