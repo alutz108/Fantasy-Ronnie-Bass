@@ -2252,6 +2252,10 @@ function applySeasonalLogo(now) {
 }
 applySeasonalLogo(new Date());
 
+/* ---------- install as an app ---------- */
+// Registers the tiny service worker (sw.js) so Chrome offers "Install app". It saves nothing, so updates always show up right away.
+if ("serviceWorker" in navigator && location.protocol === "https:") { try { navigator.serviceWorker.register("sw.js").catch(() => {}); } catch (e) { /* not available here: fine */ } }
+
 /* ---------- Trade Machine (test build) ---------- */
 // A calculator only: it never sends a trade. Rosters and picks come live from Sleeper; values blend several sources.
 const TM = {
