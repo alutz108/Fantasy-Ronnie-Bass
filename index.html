@@ -593,6 +593,25 @@ html { scroll-padding-top: env(safe-area-inset-top, 0px); }
 /* the Thanksgiving logo is taller (the feathers rise above the crest). The feathers use the header's top padding, so the header keeps its height. */
 h1.brand .logo.festive { height: 70px; margin: -14px 0 0; }
 @media (max-width: 720px) { h1.brand .logo.festive { height: 52px; margin: -8px 0 0; } }
+
+/* Lineup Optimizer */
+.lu-controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
+.lu-week { font-weight: 700; color: var(--navy); }
+.lu-top { text-align: center; }
+.lu-total { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.lu-big { font-size: 44px; font-weight: 800; line-height: 1.05; color: var(--navy); }
+.lu-up .lu-big { color: var(--ok-fg); }
+.lu-lbl { font-size: 13px; color: var(--muted); }
+.lu-cmp { margin: 10px 0 4px; }
+.lu-tag { display: inline-block; font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 99px; border: 1px solid var(--line); color: var(--muted); vertical-align: middle; }
+.lu-tag.bad { background: var(--bad-bg); color: var(--bad-fg); border-color: var(--bad-line); }
+.lu-tag.warn { background: var(--warn-bg); color: var(--warn-fg); border-color: var(--warn-line); }
+.lu-swaps { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.lu-swaps li { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding-bottom: 10px; border-bottom: 1px dotted var(--line); }
+.lu-over { color: var(--muted); font-size: 14px; margin-top: 2px; }
+.lu-gain { font-weight: 800; font-size: 18px; white-space: nowrap; }
+.lu-gain.up { color: var(--ok-fg); } .lu-gain.down { color: var(--bad-fg); }
+.lu-warn { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 6px; color: var(--warn-fg); }
 </style>
 </head>
 <body>
@@ -1898,6 +1917,7 @@ const pages = {
   draftorder: ["Draft Order", (c) => draftOrderView(c)],
   trades: ["Trades", (c, p) => tradesView(c, p)],
   trade: ["Trade Machine", (c) => tradeView(c)],
+  lineup: ["Lineup Optimizer", (c) => lineupView(c)],
   pickcard: ["Pick Report Card", (c) => pickCardView(c)],
   alltime: ["All-time", (c) => allTimeView(c)],
   h2h: ["Head-to-head", (c, p) => h2hView(c, p)],
@@ -2546,7 +2566,7 @@ function tmPrepare(raw, cx) {
   stat("dp", (src.dp && src.dp.label) || "DynastyProcess", src.dp, (src.dp && src.dp.url) || "https://dynastyprocess.com");
   const week = (Number(L.settings && L.settings.last_scored_leg) || raw.lastScored || 0) + 1;
   const dl = Number(L.settings && L.settings.trade_deadline) || raw.tradeDeadline || 0;
-  const D = { demo: !!raw.demo, env, examples: raw.examples || [], finder: raw.finder || [], startMode: raw.startMode || "", loadedAt: Date.now(), season, slots, limitTotal, teams, assets, byTeam, status, week, card, deadline: dl > 0 && dl < 99 ? dl : 0, noMarket: !sg && !dp };
+  const D = { demo: !!raw.demo, env, examples: raw.examples || [], finder: raw.finder || [], startMode: raw.startMode || "", loadedAt: Date.now(), season, slots, limitTotal, teams, assets, byTeam, status, week, card, deadline: dl > 0 && dl < 99 ? dl : 0, noMarket: !sg && !dp, scoring: L.scoring_settings || null };
   tmApplyPickAdj(D, tmS.useLeague);
   return D;
 }
@@ -2794,7 +2814,7 @@ function tmUseExample(S, i) {   // demo only: set up a ready-made trade
   S.block = ex.items.map((it) => { const a = find(it); return a ? { id: a.id, from: tid(it.from), to: tid(it.to) } : null; }).filter(Boolean);
   S.q = ""; S.pos = "ALL"; S.locks = {}; S.view = S.teams[0]; S.copied = false; S.example = i; S.balOpen = null;
 }
-function tmRedraw() { if (document.querySelector("#tm-root")) tmRefresh(); else if (document.querySelector("#pc-root")) render(); else if (document.querySelector("#trades-body") && typeof tradesBody === "function") document.querySelector("#trades-body").innerHTML = tradesBody(ctx, params); }
+function tmRedraw() { if (document.querySelector("#tm-root")) tmRefresh(); else if (document.querySelector("#lu-root") && typeof lineupRefresh === "function") lineupRefresh(); else if (document.querySelector("#pc-root")) render(); else if (document.querySelector("#trades-body") && typeof tradesBody === "function") document.querySelector("#trades-body").innerHTML = tradesBody(ctx, params); }
 function tmApplySlots(S, slots) {   // a team was chosen, changed or removed: keep the trade consistent
   S.slots = slots; S.teams = slots.filter((x, i) => x != null && slots.indexOf(x) === i);
   S.block = S.block.filter((b) => S.teams.includes(b.from) && S.teams.includes(b.to));
@@ -3894,6 +3914,18 @@ SHARE.build["tm:deal"] = (p) => {
     blocks: [{ type: "callout", title: p.verdict.head, text: p.verdict.sub, tone: vt }, { type: "nets", items: p.teams.map((t) => ({ name: t.name, value: shareNet(t.net), sub: `Gets ${Math.round(t.get).toLocaleString()} \u00b7 Gives ${Math.round(t.give).toLocaleString()}`, tone: tone(t.net) })) }, ...sends, ...(notes.length ? [{ type: "text", text: notes.join("\n"), size: 28 }] : [])],
     footer: "Values are estimates from several sources. A starting point, not an offer.", text: shareDealText(p), lines: [] };
 };
+// the best lineup for a week
+// payload: { team, week, src, total, gain, current, rows: [{ slot, name, pos, nfl, proj, tag }], swaps: [{ start, startPos, sit, gain }], projected }
+SHARE.build["lineup:best"] = (p) => {
+  const up = p.gain != null && p.gain > 0.05, f1 = (n) => (Math.round(n * 10) / 10).toFixed(1), sg = (n) => (Math.round(n * 10) > 0 ? "+" : Math.round(n * 10) < 0 ? "\u2212" : "") + f1(Math.abs(n));
+  const swapLines = (p.swaps || []).map((s) => `Start ${s.start}${s.sit ? " over " + s.sit : ""} (${sg(s.gain)})`);
+  const text = [`Best lineup for ${p.team}, Week ${p.week}: ${f1(p.total)} projected`, ...(p.current != null ? [up ? `Current lineup: ${f1(p.current)} (${sg(p.gain)} available)` : `Matches the current lineup (${f1(p.current)})`] : []), "", ...p.rows.map((r) => `${r.slot}: ${r.name} (${f1(r.proj)})`), ...(swapLines.length ? ["", "Changes:", ...swapLines.map((l) => "\u2022 " + l)] : []), "", "Projected points are estimates."].join("\n");
+  return { filename: `best-lineup-${shareSlug(p.team)}-week-${p.week}.png`, tag: `Week ${p.week} lineup`, title: p.team, subtitle: p.src || "",
+    blocks: [{ type: "callout", title: `${f1(p.total)} projected`, text: p.current != null ? (up ? `${sg(p.gain)} better than the current lineup (${f1(p.current)}).` : "Matches the current lineup.") : "The best lineup from the current roster.", tone: up ? "good" : "info" },
+      { type: "table", heads: ["Slot", "Player", "Proj"], widths: [0.2, 0.62, 0.18], align: ["left", "left", "right"], bold: 1, rows: p.rows.map((r) => ({ cells: [r.slot, r.name + (r.pos ? ` (${r.pos})` : ""), f1(r.proj)], tone: r.tag === "questionable" ? "warn" : r.tag ? "bad" : null })) },
+      ...(swapLines.length ? [{ type: "text", text: swapLines.join("\n"), size: 28 }] : [])],
+    footer: p.projected ? "Projected points are estimates." : "Based on recent scoring averages. Estimates only.", text, lines: [] };
+};
 if (typeof module !== "undefined" && module.exports) module.exports = { SHARE, shareFit, shareWrap, shareLayout, drawShareCard };
 
 /* ---------- Draft Order ---------- */
@@ -4069,6 +4101,206 @@ function draftOrderView(cx) {
 
 document.addEventListener("change", (e) => { const s = e.target.closest && e.target.closest("select[data-do=year]"); if (s) { DO.year = Number(s.value); render(); } });
 document.addEventListener("click", (e) => { const b = e.target.closest && e.target.closest("[data-do=retry]"); if (b) { DO.at = 0; DO.error = ""; DO.data = null; render(); } });
+
+/* ---------- Lineup Optimizer ---------- */
+// Picks the best lineup a team can set for the coming week, from projected points. It only calculates: nothing is sent to Sleeper.
+// It reuses the Trade Machine's league data (rosters, players, lineup slots). Projections come from Sleeper's own projections feed,
+// scored with this league's rules. If that feed can't be reached it falls back to each player's recent scoring average, and says so.
+const LU = { team: null, inj: "doubtful", started: false, loading: false, data: null, error: "" };
+try { const t = Number(localStorage.getItem("fh-lineup-team")), m = localStorage.getItem("fh-lineup-inj"); if (t) LU.team = t; if (["doubtful", "out", "questionable"].includes(m)) LU.inj = m; } catch (e) { /* no saved choice: fine */ }
+const LU_INJ = [["doubtful", "Skip Out and Doubtful (recommended)"], ["out", "Skip only Out"], ["questionable", "Skip Out, Doubtful and Questionable"]];
+const LU_FLEX = { FLEX: ["RB", "WR", "TE"], WRRB_FLEX: ["RB", "WR"], REC_FLEX: ["WR", "TE"], SUPER_FLEX: ["QB", "RB", "WR", "TE"] };
+const LU_OUT = new Set(["out", "ir", "pup", "sus", "suspended", "dnr", "cov", "na"]);
+const luOkSlot = (slot, pos) => (LU_FLEX[slot] ? LU_FLEX[slot].includes(pos) : slot === pos);
+const luFmt = (n) => (Math.round((Number(n) || 0) * 10) / 10).toFixed(1);
+const luSigned = (n) => (Math.round(n * 10) > 0 ? "+" : Math.round(n * 10) < 0 ? "\u2212" : "") + luFmt(Math.abs(n));
+function luHealth(inj) { const s = String(inj || "").toLowerCase(); return LU_OUT.has(s) ? "out" : s === "doubtful" ? "doubtful" : s === "questionable" ? "questionable" : ""; }
+// can this player be started under the chosen injury setting? (IR and taxi players never can)
+function luEligible(a, mode) {
+  if (a.status !== "active") return false;
+  const h = luHealth(a.inj);
+  if (h === "out") return false;
+  if (h === "doubtful" && mode !== "out") return false;
+  if (h === "questionable" && mode === "questionable") return false;
+  return true;
+}
+
+// Best assignment of players to slots (maximum total points), exact, including odd flex slots like WR/RB or WR/TE.
+// weights[i][j] = points if player j fills slot i, or null if not allowed. Returns the player index for each slot, or -1.
+function luAssign(weights) {
+  const n = weights.length; if (!n) return [];
+  const m = Math.max(n, weights[0].length), BIG = 1e6;
+  const cost = (i, j) => { const w = j < weights[i].length ? weights[i][j] : null; return w == null ? BIG : -w; };
+  const u = Array(n + 1).fill(0), v = Array(m + 1).fill(0), p = Array(m + 1).fill(0), way = Array(m + 1).fill(0);
+  for (let i = 1; i <= n; i++) {
+    p[0] = i; let j0 = 0; const minv = Array(m + 1).fill(Infinity), used = Array(m + 1).fill(false);
+    do {
+      used[j0] = true; const i0 = p[j0]; let delta = Infinity, j1 = 0;
+      for (let j = 1; j <= m; j++) if (!used[j]) {
+        const cur = cost(i0 - 1, j - 1) - u[i0] - v[j];
+        if (cur < minv[j]) { minv[j] = cur; way[j] = j0; }
+        if (minv[j] < delta) { delta = minv[j]; j1 = j; }
+      }
+      for (let j = 0; j <= m; j++) if (used[j]) { u[p[j]] += delta; v[j] -= delta; } else minv[j] -= delta;
+      j0 = j1;
+    } while (p[j0] !== 0);
+    do { const j1 = way[j0]; p[j0] = p[j1]; j0 = j1; } while (j0);
+  }
+  const res = Array(n).fill(-1);
+  for (let j = 1; j <= m; j++) if (p[j]) { const i = p[j] - 1, jj = j - 1; if (jj < weights[i].length && weights[i][jj] != null) res[i] = jj; }
+  return res;
+}
+// players: [{ id, pos, proj, prod }] (already limited to those who can start). slots: ["QB", "RB", ..., "FLEX"]
+function luOptimize(players, slots) {
+  const W = slots.map((s) => players.map((p) => (luOkSlot(s, p.pos) ? p.proj + (p.prod || 0) * 1e-4 : null)));   // tiny tie-break: recent form
+  const pick = luAssign(W), rows = slots.map((slot, i) => ({ slot, a: pick[i] >= 0 ? players[pick[i]] : null }));
+  return { rows, total: rows.reduce((t, r) => t + (r.a ? r.a.proj : 0), 0) };
+}
+// What to change: players the best lineup starts that the current one doesn't, paired with who they replace.
+function luSwaps(best, cur) {
+  const bestIds = new Set(best.filter((r) => r.a).map((r) => r.a.id)), curIds = new Set(cur.filter((r) => r.a).map((r) => r.a.id));
+  const starts = best.filter((r) => r.a && !curIds.has(r.a.id)).map((r) => r.a).sort((x, y) => y.proj - x.proj);
+  const sits = cur.filter((r) => r.a && !bestIds.has(r.a.id)).map((r) => r.a);
+  const out = [];
+  for (const s of starts) {
+    let k = sits.map((x, i) => ({ x, i })).filter(({ x }) => x.pos === s.pos).sort((a, b) => a.x.proj - b.x.proj)[0];
+    if (!k) k = sits.map((x, i) => ({ x, i })).sort((a, b) => a.x.proj - b.x.proj)[0];
+    const sit = k ? sits.splice(k.i, 1)[0] : null;
+    out.push({ start: s, sit, gain: s.proj - (sit ? (sit.eff != null ? sit.eff : sit.proj) : 0) });
+  }
+  return out;
+}
+// Sleeper's projection stats -> points under this league's scoring (falls back to the PPR, half-PPR or standard total Sleeper gives).
+function luPoints(item, scoring, pos) {
+  const st = (item && item.stats) || {}, num = (x) => (typeof x === "number" && isFinite(x) ? x : null);
+  if (pos === "DEF") { const v = num(st.pts_ppr) ?? num(st.pts_std) ?? num(st.pts_half_ppr); return v == null ? 0 : v; }
+  if (scoring && typeof scoring === "object") {
+    let t = 0, used = 0;
+    for (const [k, v] of Object.entries(st)) { const w = scoring[k]; if (typeof w === "number" && typeof v === "number") { t += v * w; used++; } }
+    const bonus = { TE: scoring.bonus_rec_te, RB: scoring.bonus_rec_rb, WR: scoring.bonus_rec_wr }[pos];
+    if (bonus && typeof st.rec === "number") t += st.rec * bonus;
+    if (used >= 3) return t;
+  }
+  const r = scoring && typeof scoring.rec === "number" ? scoring.rec : 1;
+  const v = r >= 0.75 ? num(st.pts_ppr) : r > 0.25 ? num(st.pts_half_ppr) : num(st.pts_std);
+  return v == null ? (num(st.pts_ppr) ?? 0) : v;
+}
+// everything for one team: the best lineup, the current one, what to change, and who is left on the bench
+function luCompute(D, teamId, data, mode) {
+  const assets = (D.byTeam.get(teamId) || []).map((id) => D.assets.get(id)).filter((a) => a && a.type === "player");
+  const have = !!(data && data.proj && data.proj.size >= 40);
+  const players = assets.map((a) => {
+    const known = have && data.proj.has(a.pid);
+    const proj = have ? (known ? data.proj.get(a.pid) : 0) : a.prod || 0;
+    return { id: a.id, pid: a.pid, name: a.name, pos: a.pos, nfl: a.nfl, inj: a.inj, status: a.status, prod: a.prod || 0, proj: Math.round(proj * 100) / 100, noProj: have && !known, health: luHealth(a.inj) };
+  });
+  for (const p of players) p.eff = p.health === "out" || p.status !== "active" ? 0 : p.proj;   // what he will really score if started
+  const ok = players.filter((p) => luEligible(p, mode));
+  const best = luOptimize(ok, D.slots);
+  const byPid = new Map(players.map((p) => [p.pid, p]));
+  const starters = data && data.starters ? data.starters.get(teamId) : null;
+  let cur = null;
+  if (starters && starters.some((x) => x && x !== "0")) {
+    cur = D.slots.map((slot, i) => ({ slot, a: byPid.get(String(starters[i])) || null }));
+    cur = { rows: cur, total: cur.reduce((t, r) => t + (r.a ? r.a.eff : 0), 0) };
+  }
+  const used = new Set(best.rows.filter((r) => r.a).map((r) => r.a.id));
+  const bench = players.filter((p) => !used.has(p.id)).sort((x, y) => y.proj - x.proj);
+  const warnings = [];
+  if (cur) for (const r of cur.rows) {
+    const a = r.a; if (!a) { warnings.push(`The ${r.slot} spot is empty.`); continue; }
+    if (a.status !== "active") warnings.push(`${a.name} is on ${a.status === "ir" ? "IR" : "the taxi squad"} but is set as a starter.`);
+    else if (a.health === "out") warnings.push(`${a.name} is listed Out and is in your lineup.`);
+    else if (a.health === "doubtful") warnings.push(`${a.name} is Doubtful and is in your lineup.`);
+    else if (a.noProj) warnings.push(`${a.name} has no projection this week (bye week or not expected to play).`);
+  }
+  return { players, best, cur, swaps: cur ? luSwaps(best.rows, cur.rows) : [], bench, warnings, projected: have };
+}
+// Sleeper's projections list -> Map(player id -> points under this league's scoring)
+function luProjMap(list, scoring, posOf) {
+  const map = new Map();
+  for (const it of Array.isArray(list) ? list : []) { const pid = it && it.player_id != null ? String(it.player_id) : null; if (!pid) continue; const pos = posOf ? posOf(pid) : ""; map.set(pid, Math.round(luPoints(it, scoring, pos) * 100) / 100); }
+  return map;
+}
+
+/* ---------- getting this week's numbers ---------- */
+async function luFetchWithTimeout(url, ms) {
+  const ctl = typeof AbortController !== "undefined" ? new AbortController() : null, t = setTimeout(() => ctl && ctl.abort(), ms);
+  try { const r = await fetch(url, ctl ? { signal: ctl.signal } : undefined); if (!r.ok) throw new Error("HTTP " + r.status); return await r.json(); } finally { clearTimeout(t); }
+}
+async function lineupFetch() {
+  const D = tmS.data; if (!D) { LU.loading = false; return; }
+  LU.loading = true;
+  const week = D.week;
+  try {
+    if (typeof TRADE_DEMO !== "undefined" && TRADE_DEMO.lineup) {
+      const dm = TRADE_DEMO.lineup;
+      LU.data = { week, proj: new Map(Object.entries(dm.proj || {}).map(([k, v]) => [String(k), v])), starters: new Map(Object.entries(dm.starters || {}).map(([k, v]) => [Number(k), v])), src: dm.src || "Demo projections (made up)", demo: true };
+    } else {
+      const id = (typeof liveInfo !== "undefined" && liveInfo && liveInfo.leagueId) || SLEEPER_DEFAULT.leagueId;
+      const posOf = (pid) => { const a = D.assets.get("p:" + pid); return a ? a.pos : ""; };
+      const [mu, pj] = await Promise.all([
+        sleeperGet(`/league/${id}/matchups/${week}`).catch(() => null),
+        luFetchWithTimeout(`https://api.sleeper.com/projections/nfl/${D.season}/${week}?season_type=regular&position[]=QB&position[]=RB&position[]=WR&position[]=TE&position[]=DEF&order_by=pts_ppr`, 12000).catch(() => null),
+      ]);
+      const starters = new Map(); for (const r of Array.isArray(mu) ? mu : []) if (r && r.roster_id != null) starters.set(Number(r.roster_id), (r.starters || []).map(String));
+      const proj = luProjMap(pj, D.scoring, posOf);
+      LU.data = { week, proj: proj.size >= 40 ? proj : null, starters, src: proj.size >= 40 ? `Sleeper\u2019s Week ${week} projections, scored with your league\u2019s rules` : "Recent scoring averages (Sleeper\u2019s projections weren\u2019t available right now)", demo: false };
+    }
+  } catch (e) { LU.data = { week, proj: null, starters: new Map(), src: "Recent scoring averages (this week\u2019s numbers couldn\u2019t be loaded)", demo: false }; }
+  LU.loading = false;
+  lineupRefresh();
+}
+
+/* ---------- the page ---------- */
+function lineupPayload(D, team, res) {
+  const t = D.teams.find((x) => x.id === team) || {}, name = t.mgr || t.name || "Team";
+  return { team: name, teamName: t.name || "", week: D.week, src: LU.data ? LU.data.src : "", total: res.best.total, gain: res.cur ? res.best.total - res.cur.total : null, current: res.cur ? res.cur.total : null,
+    rows: res.best.rows.map((r) => ({ slot: r.slot, name: r.a ? r.a.name : "(empty)", pos: r.a ? r.a.pos : "", nfl: r.a ? r.a.nfl : "", proj: r.a ? r.a.proj : 0, tag: r.a ? (r.a.health || "") : "" })),
+    swaps: res.swaps.map((s) => ({ start: s.start.name, startPos: s.start.pos, sit: s.sit ? s.sit.name : "", gain: s.gain })), projected: res.projected };
+}
+const luWho = (a) => `${esc(a.name)}<span class="hide-sm muted"> ${esc(a.pos)}${a.nfl ? " \u00b7 " + esc(a.nfl) : ""}</span> ${luTag(a)}<span class="show-sm sm-sub">${esc(a.pos)}${a.nfl ? " \u00b7 " + esc(a.nfl) : ""}</span>`;
+const luTag = (a) => (a.status === "ir" ? `<span class="lu-tag bad">IR</span>` : a.status === "taxi" ? `<span class="lu-tag">Taxi</span>` : a.health === "out" ? `<span class="lu-tag bad">Out</span>` : a.health === "doubtful" ? `<span class="lu-tag bad">Doubtful</span>` : a.health === "questionable" ? `<span class="lu-tag warn">Questionable</span>` : a.noProj ? `<span class="lu-tag">No game</span>` : "");
+function lineupView(cx) {
+  tmCtx = cx;
+  if (!tmS.started) { tmS.started = true; setTimeout(() => tmLoad(cx), 0); }
+  const D = tmS.data;
+  const head = `<section class="card tm-head"><h2>Lineup Optimizer</h2><p class="note" style="margin:0">Pick your team and see the best lineup you can set for the coming week. This only calculates. Set your lineup in Sleeper.</p></section>`;
+  if (tmS.error) return `<div id="lu-root">${head}<section class="card"><p class="tm-warn">\u26a0 ${esc(tmS.error)}</p><button class="btn primary" data-tm="retry">Try again</button></section></div>`;
+  if (!D) return `<div id="lu-root">${head}<section class="card tm-loading" role="status"><div class="tm-spin" aria-hidden="true"></div><p id="tm-status">${esc(tmS.status || "Loading your league\u2026")}</p></section></div>`;
+  if (!LU.data || LU.data.week !== D.week) {
+    if (!LU.loading) { LU.loading = true; setTimeout(lineupFetch, 0); }   // marked now, so two quick refreshes never start two requests
+    return `<div id="lu-root">${head}<section class="card tm-loading" role="status"><div class="tm-spin" aria-hidden="true"></div><p>Getting Week ${esc(D.week)} projections\u2026</p></section></div>`;
+  }
+  if (!D.teams.some((t) => t.id === LU.team)) LU.team = D.teams[0].id;
+  const res = luCompute(D, LU.team, LU.data, LU.inj), pay = lineupPayload(D, LU.team, res), gain = res.cur ? res.best.total - res.cur.total : null;
+  const controls = `<section class="card"><div class="lu-controls">
+      <label class="inline">Team <select id="lu-team" data-lu="team">${D.teams.map((t) => `<option value="${t.id}"${t.id === LU.team ? " selected" : ""}>${esc(t.name)}${t.mgr ? ` (${esc(t.mgr)})` : ""}</option>`).join("")}</select></label>
+      <label class="inline">Injured players <select id="lu-inj" data-lu="inj">${LU_INJ.map(([v, l]) => `<option value="${v}"${v === LU.inj ? " selected" : ""}>${esc(l)}</option>`).join("")}</select></label>
+      <span class="lu-week">Week ${esc(D.week)}</span></div>
+      ${D.demo ? `<p class="tm-demo">Demo league with made-up numbers, just for trying the layout</p>` : ""}</section>`;
+  const banner = `<section class="card lu-top ${gain != null && gain > 0.05 ? "lu-up" : ""}"><div class="lu-total"><span class="lu-big">${luFmt(res.best.total)}</span><span class="lu-lbl">projected points, best lineup</span></div>
+      ${res.cur ? `<p class="lu-cmp">${gain > 0.05 ? `Your current lineup projects <strong>${luFmt(res.cur.total)}</strong>. Switching gets you <strong>${luSigned(gain)}</strong>.` : `Your current lineup already matches the best one (${luFmt(res.cur.total)}).`}</p>` : `<p class="lu-cmp muted">Your lineup for this week isn\u2019t set in Sleeper yet, or couldn\u2019t be read, so there\u2019s nothing to compare.</p>`}
+      <p class="tm-small muted">${esc(LU.data.src)}.${res.projected ? "" : " Averages are a rougher guide than projections."}</p></section>`;
+  const bestTable = table(["Slot", "Player", "Proj"], res.best.rows.map((r) => [`<strong>${esc(r.slot)}</strong>`, r.a ? luWho(r.a) : `<span class="muted">(empty)</span>`, r.a ? luFmt(r.a.proj) : "-"]));
+  const bestCard = `<section class="card"><h3>Best lineup</h3>${bestTable}<div class="row tm-actions">${typeof shareBtn === "function" ? shareBtn("lineup:best", pay, { label: "Share as picture", cls: "primary" }) : ""}</div></section>`;
+  const swapCard = res.cur ? `<section class="card"><h3>What to change</h3>${res.swaps.length ? `<ul class="lu-swaps">${res.swaps.map((s) => `<li><div><div><strong>Start ${esc(s.start.name)}</strong> <span class="muted">${esc(s.start.pos)} \u00b7 ${luFmt(s.start.proj)}</span></div><div class="lu-over">${s.sit ? `over <strong>${esc(s.sit.name)}</strong> <span class="muted">${esc(s.sit.pos)} \u00b7 ${luFmt(s.sit.eff)}</span> ${luTag(s.sit)}` : "in the empty spot"}</div></div><span class="lu-gain ${s.gain >= 0 ? "up" : "down"}">${luSigned(s.gain)}</span></li>`).join("")}</ul>` : `<p class="muted">No changes needed.</p>`}${res.warnings.length ? `<ul class="lu-warn">${res.warnings.map((w) => `<li>\u26a0 ${esc(w)}</li>`).join("")}</ul>` : ""}</section>` : (res.warnings.length ? `<section class="card"><ul class="lu-warn">${res.warnings.map((w) => `<li>\u26a0 ${esc(w)}</li>`).join("")}</ul></section>` : "");
+  const benchCard = `<section class="card"><h3>Bench</h3>${table(["Player", "Proj"], res.bench.map((p) => [luWho(p), p.noProj || p.status !== "active" ? "-" : luFmt(p.proj)]))}<p class="tm-small muted">IR and taxi players can\u2019t be started. A game that has already kicked off can\u2019t be changed in Sleeper.</p></section>`;
+  return `<div id="lu-root">${head}${controls}${banner}${bestCard}${swapCard}${benchCard}</div>`;
+}
+function lineupRefresh() {
+  const root = document.querySelector("#lu-root"); if (!root || !tmCtx) return;
+  const keep = document.activeElement && document.activeElement.id;
+  root.outerHTML = lineupView(tmCtx);
+  if (keep) { const el = document.getElementById(keep); if (el && el.focus) el.focus(); }
+}
+document.addEventListener("change", (e) => {
+  const el = e.target; if (!el || !el.dataset || !el.dataset.lu) return;
+  if (el.dataset.lu === "team") { LU.team = Number(el.value); try { localStorage.setItem("fh-lineup-team", String(LU.team)); } catch (x) { /* fine */ } }
+  else if (el.dataset.lu === "inj") { LU.inj = el.value; try { localStorage.setItem("fh-lineup-inj", LU.inj); } catch (x) { /* fine */ } }
+  lineupRefresh();
+});
+if (typeof module !== "undefined" && module.exports) module.exports = { luAssign, luOptimize, luSwaps, luPoints, luProjMap, luEligible, luHealth };
 
 /* ---------- start ---------- */
 mergeData();
