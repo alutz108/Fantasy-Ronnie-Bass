@@ -612,6 +612,13 @@ h1.brand .logo.festive { height: 70px; margin: -14px 0 0; }
 .lu-gain { font-weight: 800; font-size: 18px; white-space: nowrap; }
 .lu-gain.up { color: var(--ok-fg); } .lu-gain.down { color: var(--bad-fg); }
 .lu-warn { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 6px; color: var(--warn-fg); }
+
+/* Trade Finder: what is moving (one or several players and picks) */
+.tf-chosen { margin-top: 12px; display: grid; gap: 8px; }
+.tf-pick { display: flex; align-items: center; gap: 10px; border: 1px solid var(--line); border-radius: 10px; padding: 4px 4px 4px 12px; background: var(--card); }
+.tf-pick .tf-main { flex: 1; min-width: 0; }
+.tf-pick .tf-v { font-weight: 700; white-space: nowrap; }
+.tf-total { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; justify-content: space-between; margin: 2px 0 0; }
 </style>
 </head>
 <body>
@@ -2319,7 +2326,7 @@ const TM = {
   dp: "https://raw.githubusercontent.com/dynastyprocess/data/master/files",
   maxTeams: 4,
 };
-const tmS = { mode: "build", find: { team: null, pid: null, goal: "shop", me: null, picks: true, only: false }, fmore: {}, fcache: null, fexample: undefined, card: { season: "all", round: "all", verdict: "all" }, useLeague: true, balOpen: null, view: 0, note: "", slots: [null, null], teams: [], block: [], pos: "ALL", q: "", windows: {}, locks: {}, started: false, loading: false, status: "", error: "", data: null, copied: false };
+const tmS = { mode: "build", find: { team: null, pids: [], goal: "shop", me: null, picks: true, only: false }, fmore: {}, fcache: null, fexample: undefined, card: { season: "all", round: "all", verdict: "all" }, useLeague: true, balOpen: null, view: 0, note: "", slots: [null, null], teams: [], block: [], pos: "ALL", q: "", windows: {}, locks: {}, started: false, loading: false, status: "", error: "", data: null, copied: false };
 let tmCtx = null, tmFullDb = null;
 
 const tmFmt = (n) => Math.round(Number(n) || 0).toLocaleString("en-US");
@@ -2801,7 +2808,7 @@ async function tmLoad(cx) {
     }
     S.data = tmPrepare(raw, cx);
     if (S.data.examples.length && !S.teams.length) tmUseExample(S, 0);
-    if (S.data.startMode === "find" && S.data.finder.length && !S.find.pid) tfUseExample(S, 0);
+    if (S.data.startMode === "find" && S.data.finder.length && !S.find.pids.length) tfUseExample(S, 0);
   } catch (e) { S.error = "Couldn\u2019t load the league. " + ((e && e.message) || "Check your connection and try again."); S.data = null; }
   S.loading = false;
   tmRedraw();
@@ -3000,14 +3007,19 @@ function pickCardView(cx) {
 document.addEventListener("change", (e) => { const s = e.target.closest && e.target.closest("select[data-tm=cardf]"); if (s) { tmS.card[s.dataset.k] = s.value; render(); } });
 
 /* ---------- Trade Finder ---------- */
-// Pick a player and the Finder builds trades around him with the other teams, using the Trade Machine's own values, team modes,
+// Pick one or more players and picks from a team and the Finder builds trades around them with the other teams, using the Trade Machine's own values, team modes,
 // lineup numbers and roster checks, so a trade called fair here is called fair in the Machine too.
 //   Shop him: for every other team, the best package that team could send back for him.
 //   Get him:  the best ways for one team to pay for him.
-const TF = { junk: 0.06, topShare: 1 / 3, pre: 60, keep: 5, keepGet: 10, show: 3, accept: -0.05, tiny: 150, nodes: 60000, needGain: 3 };
+const TF = { max: 6, junk: 0.06, topShare: 1 / 3, pre: 60, keep: 5, keepGet: 10, show: 3, accept: -0.05, tiny: 150, nodes: 60000, needGain: 3 };
 const tfPts = (n) => (n >= 0 ? "+" : "\u2212") + Math.abs(n).toFixed(1);
 const TF_POS = { QB: ["quarterback", "quarterbacks", "QBs"], RB: ["running back", "running backs", "RBs"], WR: ["receiver", "receivers", "WRs"], TE: ["tight end", "tight ends", "TEs"] };
 const TF_FLEX = { FLEX: ["RB", "WR", "TE"], WRRB_FLEX: ["RB", "WR"], REC_FLEX: ["WR", "TE"], SUPER_FLEX: ["QB", "RB", "WR", "TE"] };
+
+// What is being moved: one player, one pick, or a group of them (all from the same team). A group is priced as its pieces added together.
+const tfItems = (P) => (P && P.items) || (P ? [P] : []);
+function tfNames(items) { const n = items.map((a) => a.name); return n.length <= 2 ? n.join(" and ") : n.slice(0, -1).join(", ") + " and " + n[n.length - 1]; }
+function tfGroup(items) { return items.length === 1 ? items[0] : { id: items.map((a) => a.id).join("+"), type: "group", items, mkt: items.reduce((n, a) => n + a.mkt, 0), name: tfNames(items), age: null, pos: null, team: items[0].team }; }
 
 // the trade value another team can send and still leave the trade inside the "slight edge" line (the Machine's own 15% cut-off)
 function tfBounds(P) { const r = TM.gap[1] / 2; return { lo: P.mkt * (1 - r) / (1 + r), hi: P.mkt * (1 + r) / (1 - r) }; }
@@ -3078,8 +3090,8 @@ function tfFits(D, needs, X, got, after, before, dX) {
 /* ---- the search ---- */
 // everything the other team could send. Nothing is cut off by count: only pieces that are too small to matter, or too big to fit, are left out.
 function tfPool(S, D, f, P, T) {
-  const min = Math.max(100, P.mkt * TF.junk), { hi } = tfBounds(P);
-  return D.byTeam.get(T).map((id) => D.assets.get(id)).filter((a) => a && a.id !== P.id && a.pos !== "DEF" && !S.locks[a.id] && (f.picks || a.type !== "pick") && a.mkt >= min && a.mkt <= hi).sort((x, y) => y.mkt - x.mkt);
+  const min = Math.max(100, P.mkt * TF.junk), { hi } = tfBounds(P), moving = new Set(tfItems(P).map((a) => a.id));
+  return D.byTeam.get(T).map((id) => D.assets.get(id)).filter((a) => a && !moving.has(a.id) && a.pos !== "DEF" && !S.locks[a.id] && (f.picks === "only" ? a.type === "pick" : f.picks || a.type !== "pick") && a.mkt >= min && a.mkt <= hi).sort((x, y) => y.mkt - x.mkt);
 }
 // every package, of any size, that lands inside the slight-edge line. The biggest piece has to be a real part of the price.
 // Each possible biggest piece gets its own share of the search, so the offers don't all start from the same player.
@@ -3110,7 +3122,7 @@ function tfPackages(P, pool, bonus) {
 
 // run one package through the Machine's own checks. Returns null if it is not a trade both sides could take.
 function tfTry(S, D, f, P, O, T, pkg, needs) {
-  const block = [{ id: P.id, from: O, to: T }, ...pkg.map((a) => ({ id: a.id, from: T, to: O }))];
+  const items = tfItems(P), block = [...items.map((x) => ({ id: x.id, from: O, to: T })), ...pkg.map((a) => ({ id: a.id, from: T, to: O }))];
   const ev = tmEval(S, D, block, [O, T]);
   if (!ev || ev.gapPct >= TM.gap[1]) return null;
   const rs = tmRoster({ teams: [O, T] }, D, block);
@@ -3122,7 +3134,7 @@ function tfTry(S, D, f, P, O, T, pkg, needs) {
   if (nU < TF.accept || nP < TF.accept) return null;                                               // each side must see it as roughly even or better in its own mode
   const lu = tmLineups(D, [O, T], block), dO = lu.get(O).after - lu.get(O).before, dT = lu.get(T).after - lu.get(T).before;
   const dU = user === O ? dO : dT, dP = user === O ? dT : dO;
-  const fo = tfFits(D, needs, O, pkg, tmAfter(D, O, block), D.byTeam.get(O).map((id) => D.assets.get(id)), dO), ft = tfFits(D, needs, T, [P], tmAfter(D, T, block), D.byTeam.get(T).map((id) => D.assets.get(id)), dT);
+  const fo = tfFits(D, needs, O, pkg, tmAfter(D, O, block), D.byTeam.get(O).map((id) => D.assets.get(id)), dO), ft = tfFits(D, needs, T, items, tmAfter(D, T, block), D.byTeam.get(T).map((id) => D.assets.get(id)), dT);
   const fits = [...fo.fits, ...ft.fits], holes = [...fo.holes, ...ft.holes], w = { 3: 0.035, 2: 0.022, 1: 0.012 }, h = { 3: 0.04, 2: 0.02, 1: 0 };
   const bonus = fits.reduce((n, x) => n + w[x.sev], 0), hole = holes.reduce((n, x) => n + h[x.sev] * (x.team === user ? 1 : 0.7), 0);
   const score = 1.6 * Math.min(nU, nP) + 0.6 * nU - 1.5 * ev.gapPct + 0.015 * dU + 0.006 * dP - 0.012 * Math.max(0, pkg.length - 2) - 0.03 * cuts + bonus - hole - (ep.window === "win" && dP < -1.5 ? 0.02 * (-dP - 1.5) : 0);
@@ -3144,9 +3156,9 @@ const tfDiff = (a, b) => a.size + b.size - 2 * tfShared(a, b);
 const tfDistinct = (a, b) => tfDiff(a, b) >= 2 && tfShared(a, b) < Math.min(a.size, b.size);      // different by two pieces, and neither is just the other plus more
 
 function tmFind(S, D, f) {
-  const P = f && D.assets.get(f.pid);
-  if (!P || P.type !== "player") return { state: "pick", results: [], groups: [] };
-  const O = P.team;
+  const items = ((f && f.pids) || []).map((id) => D.assets.get(id)).filter((a) => a && (a.type === "pick" || (a.type === "player" && a.pos !== "DEF")));
+  if (!items.length || items.some((a) => a.team !== items[0].team)) return { state: "pick", results: [], groups: [] };
+  const P = tfGroup(items), O = P.team;
   if (f.goal === "get" && (f.me == null || f.me === O || !tmTeam(D, f.me))) return { state: "me", P, O, results: [], groups: [] };
   if (P.mkt < TF.tiny) return { state: "tiny", P, O, results: [], groups: [] };
   const needs = tfNeeds(S, D), nO = needs.get(O);
@@ -3167,8 +3179,9 @@ function tmFind(S, D, f) {
 // a few plain-English reasons and cautions for one result (needs and holes are shown separately)
 function tfWhy(D, f, P, r) {
   const out = [], nm = (id) => tmWho(D, id), w = (id) => r.ev.teams.find((t) => t.id === id).window;
-  if (w(r.T) === "reb" && P.age != null && P.age >= (P.pos === "RB" ? 26 : 28)) out.push(`${nm(r.T)} is rebuilding, so an older player may be a harder sell.`);
-  if (w(r.T) === "reb" && P.age != null && P.age <= 24) out.push(`${nm(r.T)} is rebuilding and gets a young player.`);
+  const pl = tfItems(P).filter((a) => a.type === "player"), old = pl.some((a) => a.age != null && a.age >= (a.pos === "RB" ? 26 : 28)), young = pl.some((a) => a.age != null && a.age <= 24);
+  if (w(r.T) === "reb" && old) out.push(`${nm(r.T)} is rebuilding, so an older player may be a harder sell.`);
+  if (w(r.T) === "reb" && young) out.push(`${nm(r.T)} is rebuilding and gets a young player.`);
   if (r.dT >= 0.5) out.push(`${nm(r.T)}\u2019s lineup improves by ${r.dT.toFixed(1)} points a week.`);
   if (r.dO >= 0.5) out.push(`${nm(r.O)}\u2019s lineup improves by ${r.dO.toFixed(1)} points a week.`);
   if (r.dT <= -1.5 && w(r.T) === "win") out.push(`${nm(r.T)} is going for it and loses ${(-r.dT).toFixed(1)} points a week, so expect pushback.`);
@@ -3183,7 +3196,7 @@ function tfKind(pkg) {
 
 // runs the search once per set of choices, not once per redraw
 function tfRun(S, D) {
-  const f = S.find, key = JSON.stringify([f.pid, f.goal, f.me, f.picks, S.useLeague, D.loadedAt, Object.keys(S.locks).filter((k) => S.locks[k]).sort(), S.windows]);
+  const f = S.find, key = JSON.stringify([f.pids, f.goal, f.me, f.picks, S.useLeague, D.loadedAt, Object.keys(S.locks).filter((k) => S.locks[k]).sort(), S.windows]);
   if (S.fcache && S.fcache.key === key) return S.fcache.out;
   const out = tmFind(S, D, f); S.fcache = { key, out }; return out;
 }
@@ -3204,11 +3217,11 @@ function tfCard(S, D, f, P, r) {
   const big = r.fits.filter((x) => x.sev >= 2), small = r.fits.filter((x) => x.sev < 2), why = [...small.map((x) => x.text), ...tfWhy(D, f, P, r)].slice(0, 3), lines = (arr) => `<ul>${arr.map((x) => `<li>${esc(x.text)}</li>`).join("")}</ul>`;
   return `<article class="tf-card${big.length ? " tf-has-fit" : ""}"><header class="tf-head"><h4>${esc(tfKind(r.pkg))}</h4><span class="tf-chip tm-${r.key}">${esc(v.head)} \u00b7 ${pct < 1 ? "even" : pct + "% apart"}</span></header>
     ${big.length ? `<div class="tf-fit"><strong>\u2713 Fills a need</strong>${lines(big)}</div>` : ""}${r.holes.length ? `<div class="tf-hole"><strong>\u26a0 Leaves a hole</strong>${lines(r.holes)}</div>` : ""}
-    <div class="tf-sides"><div><div class="tf-who">${who(r.O)} sends</div>${list([P])}</div><div><div class="tf-who">${who(r.T)} sends</div>${list(r.pkg)}</div></div>
+    <div class="tf-sides"><div><div class="tf-who">${who(r.O)} sends</div>${list(tfItems(P))}</div><div><div class="tf-who">${who(r.T)} sends</div>${list(r.pkg)}</div></div>
     <p class="tf-line"><strong>Lineups</strong> \u00b7 ${who(r.O)} ${tfPts(r.dO)}, ${who(r.T)} ${tfPts(r.dT)} points a week</p>
     <p class="tf-line"><strong>Rosters</strong> \u00b7 ${warns.length ? `<span class="tm-warn">\u26a0 ${warns.join(" ")}</span>` : `<span class="tm-ok">\u2713 both fit</span>`}${notes.length ? ` <span class="muted">${notes.join(" ")}</span>` : ""}</p>
     ${why.length ? `<ul class="tf-why">${why.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
-    <div class="tf-actions"><button class="btn primary" data-tm="f-open" data-i="${r.idx}">Open in Trade Machine</button>${typeof shareBtn === "function" ? shareBtn("finder:offer", { owner: tmWho(D, r.O), partner: tmWho(D, r.T), verdict: v.head, pct: pct < 1 ? "even" : pct + "% apart", ownerSends: [P.name], partnerSends: r.pkg.map((a) => `${a.name} (${tmFmt(a.mkt)})`), lines: [...big.map((x) => "\u2713 " + x.text), `Lineups: ${tmWho(D, r.O)} ${tfPts(r.dO)}, ${tmWho(D, r.T)} ${tfPts(r.dT)} points a week`] }) : ""}</div></article>`;
+    <div class="tf-actions"><button class="btn primary" data-tm="f-open" data-i="${r.idx}">Open in Trade Machine</button>${typeof shareBtn === "function" ? shareBtn("finder:offer", { owner: tmWho(D, r.O), partner: tmWho(D, r.T), verdict: v.head, pct: pct < 1 ? "even" : pct + "% apart", ownerSends: tfItems(P).map((a) => a.name), partnerSends: r.pkg.map((a) => `${a.name} (${tmFmt(a.mkt)})`), lines: [...big.map((x) => "\u2713 " + x.text), `Lineups: ${tmWho(D, r.O)} ${tfPts(r.dO)}, ${tmWho(D, r.T)} ${tfPts(r.dT)} points a week`] }) : ""}</div></article>`;
 }
 
 function tfNeedsPanel(S, D) {
@@ -3220,25 +3233,30 @@ function tfNeedsPanel(S, D) {
 function tmFinderHtml(S, D) {
   const f = S.find, sorted = [...D.teams].sort((x, y) => (x.mgr || x.name).localeCompare(y.mgr || y.name));
   const teamOpt = (sel, skip) => `<option value="">Choose a manager\u2026</option>${sorted.filter((t) => t.id !== skip).map((t) => `<option value="${t.id}"${t.id === sel ? " selected" : ""}>${esc(t.mgr || t.name)} (${esc(t.name)})</option>`).join("")}`;
-  const players = f.team != null ? D.byTeam.get(f.team).map((id) => D.assets.get(id)).filter((a) => a.type === "player" && a.pos !== "DEF") : [];
-  const playerOpt = `<option value="">${f.team == null ? "Pick a team first" : "Choose a player\u2026"}</option>${players.map((a) => `<option value="${esc(a.id)}"${a.id === f.pid ? " selected" : ""}>${esc(a.name)} (${esc(a.pos)}${a.status === "taxi" ? ", taxi" : a.status === "ir" ? ", IR" : ""}) \u00b7 ${tmFmt(a.mkt)}</option>`).join("")}`;
+  const chosen = (f.pids || []).map((id) => D.assets.get(id)).filter(Boolean), have = new Set(chosen.map((a) => a.id)), full = chosen.length >= TF.max;
+  const mine = f.team != null ? D.byTeam.get(f.team).map((id) => D.assets.get(id)).filter((a) => a && !have.has(a.id)) : [], players = mine.filter((a) => a.type === "player" && a.pos !== "DEF"), picks = mine.filter((a) => a.type === "pick");
+  const optLine = (a) => `<option value="${esc(a.id)}">${esc(a.name)} (${a.type === "pick" ? esc(a.sub) : esc(a.pos) + (a.status === "taxi" ? ", taxi" : a.status === "ir" ? ", IR" : "")}) \u00b7 ${tmFmt(a.mkt)}</option>`;
+  const playerOpt = `<option value="">${f.team == null ? "Pick a team first" : full ? "That\u2019s the most (" + TF.max + ")" : chosen.length ? "Add another player or pick\u2026" : "Add a player or pick\u2026"}</option>${players.length ? `<optgroup label="Players">${players.map(optLine).join("")}</optgroup>` : ""}${picks.length ? `<optgroup label="Draft picks">${picks.map(optLine).join("")}</optgroup>` : ""}`;
+  const pron = chosen.length > 1 ? "them" : chosen.length === 1 && chosen[0].type === "pick" ? "it" : "him";
+  const total = chosen.reduce((n, a) => n + a.mkt, 0);
+  const chosenHtml = chosen.length ? `<div class="tf-chosen" aria-label="What is moving">${chosen.map((a) => `<div class="tf-pick"><span class="tf-main"><span class="tf-n">${esc(a.name)}</span> <span class="tm-meta">${tmMeta(a)}</span></span><span class="tf-v">${tmFmt(a.mkt)}</span><button class="tm-x" data-tm="f-rm" data-id="${esc(a.id)}" aria-label="Remove ${esc(a.name)}">\u00d7</button></div>`).join("")}${chosen.length > 1 ? `<p class="tf-total tm-small"><span>${chosen.length} pieces \u00b7 total value <strong>${tmFmt(total)}</strong>. Offers are built to match the total.</span><button class="linkbtn" data-tm="f-clear">Clear all</button></p>` : ""}</div>` : "";
   const dl = D.deadline && D.week > D.deadline ? `<p class="tm-warn">\u26a0 The trade deadline (Week ${D.deadline}) has passed.</p>` : "";
   const examples = D.finder && D.finder.length ? `<div class="tm-examples"><span class="tm-small">Try an example:</span>${D.finder.map((e, i) => `<button class="chip${S.fexample === i ? " on" : ""}" data-tm="f-example" data-i="${i}" aria-pressed="${S.fexample === i}">${esc(e.title)}</button>`).join("")}</div>` : "";
-  let html = `<section class="card tm-step"><h3><span class="tm-num">1</span> Pick a player</h3>${examples}<div class="tm-slots">
-      <div class="tm-slot"><label for="tf-team">Whose player?</label><div class="tm-slotrow"><select id="tf-team" data-tm="f-team">${teamOpt(f.team, null)}</select></div></div>
-      <div class="tm-slot"><label for="tf-pid">Player</label><div class="tm-slotrow"><select id="tf-pid" data-tm="f-pid"${f.team == null ? " disabled" : ""}>${playerOpt}</select></div></div></div></section>
+  let html = `<section class="card tm-step"><h3><span class="tm-num">1</span> Pick what\u2019s moving</h3>${examples}<div class="tm-slots">
+      <div class="tm-slot"><label for="tf-team">Whose players or picks?</label><div class="tm-slotrow"><select id="tf-team" data-tm="f-team">${teamOpt(f.team, null)}</select></div></div>
+      <div class="tm-slot"><label for="tf-pid">Add to the trade</label><div class="tm-slotrow"><select id="tf-pid" data-tm="f-pid"${f.team == null || full ? " disabled" : ""}>${playerOpt}</select></div></div></div>${chosenHtml}</section>
     <section class="card tm-step"><h3><span class="tm-num">2</span> What do you want to do?</h3><div class="tm-slots">
-      <div class="tm-slot"><label for="tf-goal">I want to</label><div class="tm-slotrow"><select id="tf-goal" data-tm="f-goal"><option value="shop"${f.goal === "shop" ? " selected" : ""}>Shop him: see what other teams would give</option><option value="get"${f.goal === "get" ? " selected" : ""}>Get him: see what I could offer</option></select></div></div>
+      <div class="tm-slot"><label for="tf-goal">I want to</label><div class="tm-slotrow"><select id="tf-goal" data-tm="f-goal"><option value="shop"${f.goal === "shop" ? " selected" : ""}>Shop ${pron}: see what other teams would give</option><option value="get"${f.goal === "get" ? " selected" : ""}>Get ${pron}: see what I could offer</option></select></div></div>
       ${f.goal === "get" ? `<div class="tm-slot"><label for="tf-me">My team</label><div class="tm-slotrow"><select id="tf-me" data-tm="f-me">${teamOpt(f.me, f.team)}</select></div></div>` : ""}
-      <div class="tm-slot"><label for="tf-picks">Draft picks in offers</label><div class="tm-slotrow"><select id="tf-picks" data-tm="f-picks"><option value="1"${f.picks ? " selected" : ""}>Include them</option><option value="0"${f.picks ? "" : " selected"}>Leave them out</option></select></div></div>
+      <div class="tm-slot"><label for="tf-picks">Draft picks in offers</label><div class="tm-slotrow"><select id="tf-picks" data-tm="f-picks"><option value="1"${f.picks === true ? " selected" : ""}>Include them</option><option value="0"${f.picks ? "" : " selected"}>Leave them out</option><option value="2"${f.picks === "only" ? " selected" : ""}>Only draft picks</option></select></div></div>
       <div class="tm-slot"><label for="tf-only">Show</label><div class="tm-slotrow"><select id="tf-only" data-tm="f-only"><option value="0"${f.only ? "" : " selected"}>All offers</option><option value="1"${f.only ? " selected" : ""}>Only offers that fill a need</option></select></div></div></div>
       <p class="tm-small muted">Players you protected with the lock in the Trade Machine are never offered.</p>${tfNeedsPanel(S, D)}</section>`;
-  const R = f.pid ? tfRun(S, D) : { state: "pick", results: [], groups: [] }, isBig = (o) => o.fits.some((x) => x.sev >= 2);
+  const R = chosen.length ? tfRun(S, D) : { state: "pick", results: [], groups: [] }, isBig = (o) => o.fits.some((x) => x.sev >= 2);
   let body;
-  if (R.state === "pick") body = `<p class="tm-hint muted">Choose a team and a player to see trades.</p>`;
+  if (R.state === "pick") body = `<p class="tm-hint muted">Choose a team, then add the players or picks you want to move.</p>`;
   else if (R.state === "me") body = `<p class="tm-hint muted">Choose your team to see what you could offer for ${esc(R.P.name)}.</p>`;
-  else if (R.state === "tiny") body = `<p class="tm-hint muted">${esc(R.P.name)} is worth very little in trade value, so there is nothing meaningful to build around him.</p>`;
-  else if (R.state === "none") body = `<p class="tm-hint muted">I couldn\u2019t find an even trade for ${esc(R.P.name)}${f.picks ? "" : " without draft picks. Try including them"}.</p>`;
+  else if (R.state === "tiny") body = `<p class="tm-hint muted">${tfItems(R.P).length > 1 ? "Together, " + esc(R.P.name) + " are" : esc(R.P.name) + " is"} worth very little in trade value, so there is nothing meaningful to build around ${tfItems(R.P).length > 1 ? "them" : "it"}.</p>`;
+  else if (R.state === "none") body = `<p class="tm-hint muted">I couldn\u2019t find an even trade for ${esc(R.P.name)}${f.picks === "only" ? " with only draft picks. Try including players" : f.picks ? "" : " without draft picks. Try including them"}.</p>`;
   else {
     const groups = R.groups.map((g) => ({ ...g, offers: f.only ? g.offers.filter(isBig) : g.offers })).filter((g) => g.offers.length), total = groups.reduce((n, g) => n + g.offers.length, 0), fill = R.results.filter(isBig).length;
     const first = f.goal === "get" ? 6 : TF.show;
@@ -3249,28 +3267,32 @@ function tmFinderHtml(S, D) {
     }).join("");
     body = !total ? `<p class="tm-hint muted">None of the ${R.results.length} offers fill a big need. Switch Show back to All offers to see them.</p>`
       : `${dl}<p class="tm-small muted">${f.goal === "get" ? `${total} way${total === 1 ? "" : "s"} to get ${esc(R.P.name)} from ${esc(tmWho(D, R.O))}` : `${total} offer${total === 1 ? "" : "s"} from ${groups.length} team${groups.length === 1 ? "" : "s"} for ${esc(R.P.name)}, best teams first`}. ${fill ? `<strong>${fill}</strong> fill${fill === 1 ? "s" : ""} a big need and ${fill === 1 ? "is" : "are"} highlighted. ` : ""}Every trade looks fair to both sides in each team\u2019s mode.</p>${sections}
-      <details class="tm-help"><summary>How are these picked?</summary><p>I look through every player and pick the other team could send, in any number, and keep every package that lands inside the Machine\u2019s fair or slight-edge range (within about 15% of his trade value). Each trade has to look fair to both teams in their own mode (Win now, Balanced or Rebuild), fit both rosters and stay inside the league\u2019s position limits. The biggest piece has to be at least a third of his price, so a pile of small pieces never stands in for one big piece. Offers that fill a team\u2019s biggest gap (like having no running backs) or give a rebuilding team a first-round pick are highlighted in green and ranked higher. Smaller helps show as quiet notes. Offers that would leave a team with a hole are flagged.</p></details>`;
+      <details class="tm-help"><summary>How are these picked?</summary><p>I look through every player and pick the other team could send, in any number, and keep every package that lands inside the Machine\u2019s fair or slight-edge range (within about 15% of the trade value being moved). Each trade has to look fair to both teams in their own mode (Win now, Balanced or Rebuild), fit both rosters and stay inside the league\u2019s position limits. The biggest piece has to be at least a third of the price, so a pile of small pieces never stands in for one big piece. Offers that fill a team\u2019s biggest gap (like having no running backs) or give a rebuilding team a first-round pick are highlighted in green and ranked higher. Smaller helps show as quiet notes. Offers that would leave a team with a hole are flagged.</p></details>`;
   }
-  html += `<section class="card tm-step"><h3><span class="tm-num">3</span> ${f.goal === "get" ? "Ways to get him" : "Offers"}</h3>${body}</section>`;
+  if (f.picks === "only" && R.state === "ok") body = `<p class="tm-small muted tf-onlypicks">Showing offers made only of draft picks${f.goal === "get" ? " from you" : ""}.</p>` + body;
+  html += `<section class="card tm-step"><h3><span class="tm-num">3</span> ${f.goal === "get" ? "Ways to get " + pron : "Offers"}</h3>${body}</section>`;
   return html;
 }
 
 function tfUseExample(S, i) {   // demo only: set up a ready-made search
   const D = S.data, ex = D.finder[i]; if (!ex) return;
   const team = D.teams.find((t) => (t.mgr || t.name) === ex.team), me = ex.me ? D.teams.find((t) => (t.mgr || t.name) === ex.me) : null;
-  const P = team && D.byTeam.get(team.id).map((id) => D.assets.get(id)).find((a) => a.type === "player" && a.name === ex.player);
-  if (!P) return;
-  S.find = { team: team.id, pid: P.id, goal: ex.goal || "shop", me: me ? me.id : null, picks: S.find.picks, only: false };
+  const mine = team ? D.byTeam.get(team.id).map((id) => D.assets.get(id)) : [], names = [...(ex.players || (ex.player ? [ex.player] : [])), ...(ex.picks || [])];
+  const items = names.map((n) => mine.find((a) => a.name === n));
+  if (!items.length || items.some((a) => !a)) return;
+  S.find = { team: team.id, pids: items.map((a) => a.id), goal: ex.goal || "shop", me: me ? me.id : null, picks: S.find.picks, only: false };
   S.fmore = {}; S.mode = "find"; S.fexample = i;
 }
 
 function tfAct(name, el) {
   const S = tmS, D = S.data, f = S.find;
-  if (name === "team") { f.team = el.value ? Number(el.value) : null; f.pid = null; if (f.me === f.team) f.me = null; S.fexample = undefined; S.fmore = {}; }
-  else if (name === "pid") { f.pid = el.value || null; S.fexample = undefined; S.fmore = {}; }
+  if (name === "team") { f.team = el.value ? Number(el.value) : null; f.pids = []; if (f.me === f.team) f.me = null; S.fexample = undefined; S.fmore = {}; }
+  else if (name === "pid") { if (el.value && !f.pids.includes(el.value) && f.pids.length < TF.max) f.pids = [...f.pids, el.value]; S.fexample = undefined; S.fmore = {}; }   // adds one more piece to what is moving
+  else if (name === "rm") { f.pids = f.pids.filter((id) => id !== el.dataset.id); S.fexample = undefined; S.fmore = {}; }
+  else if (name === "clear") { f.pids = []; S.fexample = undefined; S.fmore = {}; }
   else if (name === "goal") { f.goal = el.value === "get" ? "get" : "shop"; S.fexample = undefined; S.fmore = {}; }
   else if (name === "me") { f.me = el.value ? Number(el.value) : null; S.fexample = undefined; S.fmore = {}; }
-  else if (name === "picks") { f.picks = el.value !== "0"; S.fmore = {}; }
+  else if (name === "picks") { f.picks = el.value === "2" ? "only" : el.value !== "0"; S.fmore = {}; }
   else if (name === "only") { f.only = el.value === "1"; }
   else if (name === "more") { S.fmore[Number(el.dataset.rid)] = true; }
   else if (name === "example") { tfUseExample(S, Number(el.dataset.i)); }
